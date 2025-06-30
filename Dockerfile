@@ -5,7 +5,7 @@ FROM node:22
 WORKDIR /app
 
 # Install Ghostscript, ImageMagick, and required PDF policy settings
-RUN apt-get update && apt-get install -y ghostscript && \
+RUN apt-get update && apt-get install -y ghostscript
 RUN apt-get update && apt-get install -y imagemagick && \
     sed -i 's/<policy domain="coder" rights="none" pattern="PDF" \/>/<policy domain="coder" rights="read|write" pattern="PDF" \/>/' /etc/ImageMagick-6/policy.xml
 
