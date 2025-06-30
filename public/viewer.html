@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tibls Recipe Viewer</title>
+</head>
+<body>
+  <h1><img src="/img/tibls-recipe-converter.png" alt="Tibls Recipe Loader Icon" style="height:40px; vertical-align:middle; margin-right:0.5em;">Tibls Recipe Loader</h1>
+  <table>
+    <tbody>
+      {{TABLE_ROWS}}
+    </tbody>
+  </table>
+
+  <div class="upload-form">
+    <h2>Upload a Recipe</h2>
+    <form id="uploadForm" enctype="multipart/form-data">
+      <div class="form-line">
+        <label>Recipe URL:</label>
+        <input type="text" name="input" placeholder="https://example.com/recipe">
+      </div>
+      <div class="form-line file-upload">
+        <label>Or upload an image/PDF:</label>
+        <input type="file" name="file" accept="image/*,.pdf" id="fileInput">
+      </div>
+      <div id="previewContainer"></div>
+      <button type="submit">Convert to Tibls format</button>
+      <div id="spinner"></div>
+    </form>
+    <div id="uploadStatus" style="margin-top: 1em;"></div>
+  </div>
+
+  <script>
+    document.getElementById("fileInput").addEventListener("change", function () {
+      const file = this.files[0];
+      const preview = document.getElementById("previewContainer");
+      preview.innerHTML = "";
+
+      if (file) {
+        const reader = new FileReader();
+
+        if (file.type.startsWith("image/")) {
+          reader.onload = function (e) {
+            const img = document.createElement("img");
+            img.src = e.target.result;
+            preview.appendChild(img);
+          };
+          reader.readAsDataURL(file);
+        } else if (file.type === "application/pdf") {
+          const p = document.createElement("p");
+          p.textContent = `Selected PDF: ${file.name}`;
+          preview.appendChild(p);
+        } else {
+          preview.textContent = "Unsupported file type.";
+        }
+      }
+    });
+
+    document.getElementById("uploadForm").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      const form = e.target;
+      const formData = new FormData();
+
+      const file = form.file.files[0];
+      const inputUrl = form.input.value;
+
+      if (!file && !inputUrl) {
+        alert("Please enter a URL or upload a file.");
+        return;
+      }
+
+      if (inputUrl) formData.append("input", inputUrl);
+      if (file) formData.append("filename", file);
+      if (file) formData.append("filetype", file.type);
+
+      const status = document.getElementById("uploadStatus");
+      status.textContent = "Submitting...";
+      status.className = "";
+      document.getElementById("spinner").style.display = "inline-block";
+
+      try {
+        const result = await fetch("/webhook", {
+          method: "POST",
+          body: formData
+        });
+
+        const json = await result.json();
+        if (json.viewer) {
+          status.innerHTML = `✅ Recipe queued. Reloading...`; 
+          status.className = "success";
+          setTimeout(() => window.location.reload(), 1000); 
+        } else {
+          throw new Error(json.error || "Unknown error");
+        }
+      } catch (err) {
+        status.textContent = `❌ Error: ${err.message}`;
+        status.className = "error";
+      }
+      finally {
+        document.getElementById("spinner").style.display = "none";
+      }
+    });
+  </script>
+</body>
+</html>

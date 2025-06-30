@@ -1,0 +1,155 @@
+{
+  "model": "gpt-4o",
+  "temperature": 0.3,
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "tiblsRecipe",
+        "description": "Return a Tibls JSON object parsed from the input",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "@type": {
+              "type": "string",
+              "enum": [
+                "application/tibls+json"
+              ]
+            },
+            "itemListElement": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "@type": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "summary": {
+                    "type": "string",
+                    "description": "Always generate a concise summary for the recipe, even if the source does not provide one. If missing, synthesize based on context."
+                  },
+                  "ingredients": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string"
+                        },
+                        "sectionHeader": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "text",
+                        "sectionHeader"
+                      ]
+                    }
+                  },
+                  "steps": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string"
+                        },
+                        "sectionHeader": {
+                          "type": "string"
+                        },
+                        "time": {
+                          "type": "integer"
+                        },
+                        "flipTime": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "text",
+                        "sectionHeader"
+                      ]
+                    }
+                  },
+                  "prepTime": {
+                    "type": "integer"
+                  },
+                  "cookTime": {
+                    "type": "integer"
+                  },
+                  "totalTime": {
+                    "type": "integer"
+                  },
+                  "servings": {
+                    "type": "integer"
+                  },
+                  "calories": {
+                    "type": "integer"
+                  },
+                  "urlSource": {
+                    "type": "string"
+                  },
+                  "urlHost": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "text"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "@type",
+                  "id",
+                  "name",
+                  "ingredients",
+                  "steps",
+                  "summary"
+                ]
+              }
+            }
+          },
+          "required": [
+            "@type",
+            "itemListElement"
+          ]
+        }
+      }
+    }
+  ],
+  "tool_choice": {
+    "type": "function",
+    "function": {
+      "name": "tiblsRecipe"
+    }
+  },
+  "messages": [
+    {
+      "role": "system",
+      "content": "# 📝 Instructions for Converting Recipes to Tibls JSON (Supports URLs and PDFs)\n\nWhen a recipe is provided (either as a URL or as a PDF/image file), follow these steps:\n\n---\n\n## 📥 Step 1: Source Handling (URL vs. PDF)\n\n**If given a URL:**\n- Attempt to extract JSON-LD data from the page using Schema.org’s `Recipe` schema.\n- If og:image or twitter:image metadata is present, use the most relevant one (prefer og:image) to populate ogImageUrl in the Tibls JSON, but only if the image is a clear photo of the dish or otherwise relevant to the recipe (skip logos, social icons, or ads).\n- If no metadata image is available, heuristically select a main recipe image from the body (e.g. near the title or embedded with the ingredients), only if it’s clearly a food photo.\n- If JSON-LD data is found:\n  - Parse this structured data into valid Tibls JSON.\n  - Generate intelligent `sectionHeader` groupings if possible (see grouping guidelines below).\n  - Note whether post-processing was required in `notes[]`.\n  - If JSON-LD data is sparse or missing important fields (e.g. summary, image, time values, servings), supplement missing fields using visible page content or metadata. If a summary is missing, generate a suitable one. Add a note to `notes[]` explaining what was inferred or added.\n\n**If given a PDF or image scan:**\n- Run OCR if necessary to extract raw text.\n- Identify and manually segment the following:\n  - Recipe title\n  - Ingredients section\n  - Instructions section\n  - Any time values (prep/cook/total), servings/yield\n  - Optional metadata (author, source, date, page number, recipe section/type/chapter, etc.)\n  - If the document contains an embedded image that is clearly a photo of the finished dish (e.g. adjacent to the title or on a dedicated page), use it as ogImageUrl. Avoid including logos, icons, or unrelated illustrations.\n- If the recipe appears in a historical or cookbook-style format (e.g. scanned image or PDF), generate a `summary` field based on visible context, tone, or origin — such as a brief explanation of the recipe's history or style. This should be a 1–2 sentence description even if no formal preamble exists. Always include either a `summary`. Only omit this field if the input contains no usable text.\n- Construct the Tibls JSON using the same logic as for URL-based recipes.\n- If OCR introduces ambiguity (e.g., unclear fractions, misread units), capture this in the `notes[]` array.\n- If there are any recognizable handwritten notes in the margin, capture these in the `notes[]` array.\n- Any optional metadata (author, source, page number, date, recipe section/type/chapter) should also be captured in the `notes[]` array too.\n\n---\n\n## 📦 Step 2: Tibls JSON Construction\n\nUse this format, ensuring strict validation against the Tibls JSON Schema. All fields must comply with required types and structure.\n\n```json\n@type: \"application/tibls+json\"\nitemListElement[]: [ recipe object(s) with the following required fields ]\n```\n\n**Each recipe must include:**\n- `@type`: Always `\"https://tibls.app/types/recipe\"`\n- `id`: Unique UUID string\n- `name`: Title of the recipe\n- `ingredients[]`: Array of ingredient objects\n- `steps[]`: Array of step objects\n- `summary`\n\n**Optional fields (validate if included):**\n- `urlSource`, `urlHost`\n- `created`, `updated`, `lastCooked`, `lastQueued`, `cookCount`\n- `prepTime`, `cookTime`, `totalTime`\n- `servings`\n- `calories`\n- `ogImageUrl`: URL of a clear photo of the dish, from `og:image`, `twitter:image`, or heuristics (skip logos or unrelated images)\n- `notes[]`: Array of `{ \"text\": string }` objects capturing nuances and subjective decisions made when generating the recipe\n\n- If `summary` is missing, you must generate a concise overview based on the recipe’s visible content, metadata, or surrounding context. This applies to all input types, including structured data (e.g., JSON-LD), scraped HTML, or OCR-extracted text. Use introductory paragraphs, page blurbs, or meta descriptions when available. If none are present, generate a suitable fallback summary. If a `description` is present but `summary` is not, you may use it as the basis for `summary`. Always include a `summary` in the final JSON.\n- If the source is a scraped HTML page (e.g., no JSON‑LD or missing `summary`), extract a candidate sentence (e.g., from the page’s introduction, first paragraph, or meta description). If none exists, generate a 1–2 sentence summary based on visible context (tone, style, origin).  \n  Add a note to `notes[]` like:  \n  ```json\n  { \"text\": \"Summary inferred from page content as none was provided.\" }\n  ```\n- If time values (`prepTime`, `cookTime`, `totalTime`) or `servings` are missing but mentioned in the page, extract and include them.\n- If no calorie count is present, apply the calorie estimation process (see Step 3).\n- If `ogImageUrl` is missing, infer from Open Graph or Twitter metadata, or heuristically select a clear food photo.\n\nAlways add a `notes[]` entry such as:\n```json\n{ \"text\": \"JSON-LD data was sparse; supplemented with values from visible page content (description, time values, and image metadata).\" }\n```\n\nAll final values must conform to the Tibls JSON schema.\n\n---\n\n## 🧮 Step 3: Calorie Estimation (Optional but Recommended)\n\nIf the original recipe does **not** include a calorie count:\n\n1. Estimate total calories for the entire recipe using standard values for raw ingredients (e.g., USDA database).\n2. Group contributions logically (e.g., flour, butter, sugar, nuts, fruit, eggs).\n3. Round total to the nearest 100 kcal.\n4. Add a `calories` field at the recipe level.\n5. Add a single note to `notes[]` summarizing the estimate, e.g.:\n\n```json\n{ \"text\": \"Estimated total calories ~6,000 kcal: ~1,650 from flour, ~1,300 from butter, ~775 from sugar, ~700 from raisins, ~800 from pecans, ~200 from eggs, and ~575 from glaze and other minor ingredients. Based on typical values for raw ingredients; actual values may vary.\" }\n```\n\n---\n\n## 👨‍🍳 Step 4: Ingredient Handling\n\nEach item in `ingredients[]` must be:\n\n```json\n{ \"text\": \"2 cups flour\", \"sectionHeader\": \"Dough\" }\n```\n\n- Always include `sectionHeader` — only the first in a group gets a value; all others get `\"\"`.\n- Use original unit system. Add alternate unit in parentheses:\n  - Imperial → \"1 cup (240ml) milk\"\n  - Metric → \"200g (7 oz) butter\"\n- Determine dominant system from the majority of units used.\n\n---\n\n## 🍳 Step 5: Step Handling\n\nEach item in `steps[]` must be:\n\n```json\n{ \"text\": \"Bake for 30 minutes at 350°F.\", \"sectionHeader\": \"Bake\", \"time\": 1800 }\n```\n\n- Use `sectionHeader` only on the first step of a group.\n- If a step includes a **time range**, use the lower bound and add a note to notes[].\n- If a step includes multiple timers, **split into separate steps** with shared `sectionHeader`.\n- If a step includes **per-side or flipping instructions**, and the total time is specified:\n  - Set `time` to the full duration in seconds\n  - Add a `flipTime` field equal to **half** the total `time` (rounded to nearest 5 seconds)\n  - Detect this based on language such as:\n    - “3 to 4 minutes *per side*”\n    - “Cook for 6 minutes, *flipping halfway through*”\n    - “About 4 minutes *on each side*”\n\n```json\n{ \n  \"text\": \"Cook for 6 minutes, flipping halfway through.\", \n  \"sectionHeader\": \"Grill\", \n  \"time\": 360, \n  \"flipTime\": 180 \n}\n```\n\n- Add a note to `notes[]` when `flipTime` is inferred, for example:\n```json\n{ \"text\": \"Detected per-side timing ('3 to 4 minutes per side'); set time to 420 seconds and flipTime to 210 seconds.\" }\n```\n\n---\n\n## 🧠 Grouping Guidelines for `sectionHeader`\n\nReflect logical cooking phases, such as:\n- \"Roast Eggplant\"\n- \"Tomato-Garlic Sauce\"\n- \"Cheese Béchamel\"\n\nAvoid using raw HTML headers unless they match a cooking stage.\n\n---\n\n## 🕒 Time Field Rules\n\n- `prepTime`, `cookTime`, `totalTime` in minutes\n- If not stated, calculate:\n  - Assign `time` to steps where applicable (in seconds)\n  - Classify as “prep” or “cook” and sum them\n\n---\n\n## 🍽 Servings\n\n- If a range is given, use the lower bound and add a note.\n- Must be a number (e.g., `servings: 4`).\n\n---\n\n## 📝 Notes\n\nAlways include:\n- A note if JSON-LD was used and post-processed\n- A note if timing ranges or other values were approximated\n- A note if OCR or image scanning was used\n- A calorie estimation note if one was generated (see Step 3)\n\nFormat:\n```json\n\"notes\": [\n  { \"text\": \"Time range of 35–45 minutes given; used 35 minutes.\" },\n  { \"text\": \"Parsed from scanned PDF using OCR.\" }\n]\n```\n\n---\n\n## ✅ Final Validation Step (Required)\n\nBefore returning any Tibls JSON, validate the entire output against the Tibls JSON Schema:\n\n- Ensure all required fields are present and conform to their specified types and constraints.\n- If JSON-LD or structured metadata was used, check whether all Tibls JSON fields are populated. If any are missing, ensure they are filled using either visible content or generated values (see “Augmenting Missing Fields” section). This includes always generating a `summary` field.\n- Do **not** include `\"time\"` in any `steps[]` item if the step does not involve measurable time. Omit the field entirely rather than using `0` or `null`.\n- Ensure `prepTime`, `cookTime`, and `totalTime` are in **minutes** (integers), not seconds.\n- All `time`, `prepTime`, `cookTime`, and `totalTime` values must be literal integers (no expressions or calculations in output).\n- Do **not** allow `null`, `undefined`, or placeholder values in any field.\n- `ingredients[]` and `steps[]` must contain objects with both `\"text\"` and `\"sectionHeader\"` fields. Empty strings are allowed for `sectionHeader`, but not omitted.\n- If a field is optional but included, it must follow the schema exactly.\n- The final output must be strictly valid JSON and conform fully to the Tibls schema before returning.\n- “This validation logic applies when generating JSON via natural language completion (e.g. in the ChatGPT UI). When using the API with function_call, be sure the formal schema provided in the API call explicitly marks required fields.”"
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "https://www.foodnetwork.com/recipes/trisha-yearwood/snickerdoodles-recipe-2041594"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "type": "object",
+  "properties": {
+    "@type": {
+      "type": "string",
+      "enum": ["application/tibls+json"]
+    },
+    "itemListElement": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "@type": { "type": "string" },
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "summary": {
+            "type": "string",
+            "description": "Concise 1 to 2 sentence summary of the recipe. Always generate one if missing, using page content or inferred context."
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": { "type": "string" },
+                "sectionHeader": { "type": "string" }
+              },
+              "required": ["text", "sectionHeader"]
+            }
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": { "type": "string" },
+                "sectionHeader": { "type": "string" },
+                "time": { "type": "integer" },
+                "flipTime": { "type": "integer" }
+              },
+              "required": ["text", "sectionHeader"]
+            }
+          },
+          "prepTime": { "type": "integer" },
+          "cookTime": { "type": "integer" },
+          "totalTime": { "type": "integer" },
+          "servings": { "type": "integer" },
+          "calories": { "type": "integer" },
+          "urlSource": { "type": "string" },
+          "urlHost": { "type": "string" },
+          "notes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": { "type": "string" }
+              },
+              "required": ["text"]
+            }
+          }
+        },
+        "required": ["@type", "id", "name", "ingredients", "steps", "summary"]
+      }
+    }
+  },
+  "required": [
+    "@type", "itemListElement"]
+}

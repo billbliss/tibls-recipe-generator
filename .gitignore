@@ -1,0 +1,90 @@
+# Node modules
+node_modules/
+.nyc_output/
+coverage/
+
+# TypeScript output
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Environment variables
+.env
+.env.*
+
+# VS Code
+.vscode/
+
+# ngrok or tunnel config
+.ngrok-debug.log
+ngrok.yml
+
+# Uploads and temp files
+tmp/
+*.tmp
+
+# Test data and artifacts
+# test-data/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Google service credentials
+# Node modules
+node_modules/
+.nyc_output/
+coverage/
+
+# TypeScript output
+dist/
+build/
+*.tsbuildinfo
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Environment variables
+.env
+.env.*
+
+# VS Code
+.vscode/
+
+# ngrok or tunnel config
+.ngrok-debug.log
+ngrok.yml
+
+# Temp files
+tmp/
+*.tmp
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Google service credentials
+config/tibls-pdf-ocr-7d90a9009aac.json
