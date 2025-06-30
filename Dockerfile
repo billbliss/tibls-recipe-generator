@@ -20,6 +20,9 @@ COPY . .
 COPY prompts ./prompts
 COPY public ./public
 
+# Clean old dist (important if Docker caches intermediate builds)
+RUN rm -rf dist
+
 # Build the TypeScript code into JavaScript
 # This will create a dist/ directory with the compiled code
 RUN npm run build

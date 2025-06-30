@@ -74,6 +74,6 @@ export function loadGoogleCredentialsFromBase64() {
 // Example: resolveFromRoot('config', 'settings.json') will resolve to '/path/to/project/config/settings.json'
 export function resolveFromRoot(...segments: string[]): string {
   const fullPath = path.join(process.cwd(), ...segments);
-  console.log("🔍 resolveFromRoot ->", fullPath);
+  // console.log("🔍 resolveFromRoot ->", fullPath);
   return fullPath;
 }
