@@ -72,6 +72,8 @@ export function loadGoogleCredentialsFromBase64() {
 // Resolves a path relative to the root of the project
 // This is useful for loading configuration files or assets that are located in the root directory
 // Example: resolveFromRoot('config', 'settings.json') will resolve to '/path/to/project/config/settings.json'
-//
-export const resolveFromRoot = (...segments: string[]) =>
-  path.join(process.cwd(), '..', ...segments);
+export function resolveFromRoot(...segments: string[]): string {
+  const fullPath = path.join(process.cwd(), ...segments);
+  console.log("🔍 resolveFromRoot ->", fullPath);
+  return fullPath;
+}
