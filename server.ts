@@ -46,7 +46,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
 
     const pngPath = path.join('/tmp', `page1-${Date.now()}.png`);
     try {
-      await execFileAsync('magick', [`${tempPdfPath}[0]`, pngPath]);
+      await execFileAsync('convert', [`${tempPdfPath}[0]`, pngPath]);
     } catch (err) {
       throw new Error(`ImageMagick failed: ${err}`);
     }

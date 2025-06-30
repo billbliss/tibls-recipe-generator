@@ -11,9 +11,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y imagemagick && \
     echo "🔍 PATH: $PATH" && \
     echo "🔍 Available 'magick' or related binaries:" && \
-    find / -type f \( -name "magick" -o -name "convert" -o -name "identify" \) 2>/dev/null && \
-    echo "🔍 'magick' version (if available):" && \
-    command -v magick && magick -version || echo "⚠️ 'magick' not found or not executable"
+    find / -type f \( -name "magick" -o -name "convert" -o -name "identify" \)
 
 # Copy only package manifests first (these rarely change relative to source code)
 COPY package*.json ./
