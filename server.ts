@@ -21,6 +21,10 @@ const port = process.env.PORT || 3000;
 const tiblsPrompt = fs.readFileSync(resolveFromRoot('prompts', 'chatgpt-instructions.md'), 'utf8');
 const tiblsSchema = JSON.parse(fs.readFileSync(resolveFromRoot('prompts', 'tibls-schema.json'), 'utf8'));
 
+// Log these values for debugging
+console.log('Tibls Prompt:', tiblsPrompt);
+console.log('Tibls Schema:', tiblsSchema);  
+
 app.use(bodyParser.json({ limit: '10mb' }));
 const upload = multer();
 app.use(express.static(resolveFromRoot('public')));
