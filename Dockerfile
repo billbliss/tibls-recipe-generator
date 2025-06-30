@@ -7,13 +7,21 @@ WORKDIR /app
 # Install system dependencies (like ImageMagick)
 RUN apt-get update && apt-get install -y imagemagick
 
-# Copy everything from your project into the container
-COPY . .
+# Copy only package manifests first (these rarely change relative to source code)
+COPY package*.json ./
 
-# Install Node dependencies
+# Install dependencies — this step will be cached unless package files change
 RUN npm install
 
-# Build your TypeScript and copy assets (prompts/, public/)
+# Now copy the full source code (invalidates cache only if source changes)
+COPY . .
+
+# Copy assets (prompts/, public/)
+COPY prompts ./prompts
+COPY public ./public
+
+# Build the TypeScript code into JavaScript
+# This will create a dist/ directory with the compiled code
 RUN npm run build
 
 # Expose the port the app will run on (important for Render)

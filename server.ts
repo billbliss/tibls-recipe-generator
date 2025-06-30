@@ -127,7 +127,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
 
     if (process.env.GENERATE_TEST_DATA === 'true') {
       try {
-        const debugDir = path.join(__dirname, "test-data");
+        const debugDir = resolveFromRoot('test-data');
         fs.mkdirSync(debugDir, { recursive: true });
 
         const payloadPath = path.join(debugDir, `chatPayload-${Date.now()}.json`);
@@ -155,7 +155,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
 
     if (process.env.GENERATE_TEST_DATA === 'true') {
       try {
-        const outputDir = path.join(__dirname, "test-data");
+        const outputDir = resolveFromRoot('test-data');
         fs.mkdirSync(outputDir, { recursive: true }); // ensure directory exists
 
         const outPath = path.join(outputDir, `${generateRecipeFilename(tiblsJson, false)}-chatGPT-response.json`);
