@@ -5,7 +5,12 @@ FROM node:22
 WORKDIR /app
 
 # Install system dependencies (like ImageMagick)
-RUN apt-get update && apt-get install -y imagemagick
+# RUN apt-get update && apt-get install -y imagemagick
+
+# Debug: verify ImageMagick executable path
+RUN apt-get update && apt-get install -y imagemagick && \
+    echo "✅ magick path: $(command -v magick)" && \
+    ls -l /usr/bin/magick /usr/local/bin/magick || echo "🔍 'magick' not found in expected locations"
 
 # Copy only package manifests first (these rarely change relative to source code)
 COPY package*.json ./
