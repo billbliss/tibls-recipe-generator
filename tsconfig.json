@@ -6,8 +6,9 @@
     "moduleResolution": "node",
     "esModuleInterop": true,
     "strict": true,
-    "types": ["node"],
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "sourceMap": true,
+    "resolveJsonModule": true
   },
   "include": ["./**/*.ts"],
   "exclude": ["node_modules"]
