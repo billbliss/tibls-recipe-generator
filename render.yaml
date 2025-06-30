@@ -2,7 +2,10 @@ services:
   - type: web
     name: tibls-recipe-loader
     env: node
-    buildCommand: npm run build
+    buildCommand: |
+      echo "Using Node version:" && node -v
+      echo "Available types:" && ls node_modules/@types || echo "No @types directory found"
+      npm run build
     startCommand: npm start
     plan: free
     build:
