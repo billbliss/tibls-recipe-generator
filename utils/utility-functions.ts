@@ -68,3 +68,9 @@ export function loadGoogleCredentialsFromBase64() {
 
   process.env.GOOGLE_APPLICATION_CREDENTIALS = credPath;
 }
+
+// Resolves a path relative to the root of the project
+// This is useful for loading configuration files or assets that are located in the root directory
+// Example: resolveFromRoot('config', 'settings.json') will resolve to '/path/to
+export const resolveFromRoot = (...segments: string[]) =>
+  path.join(__dirname, '..', ...segments);

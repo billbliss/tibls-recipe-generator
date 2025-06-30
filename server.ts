@@ -10,7 +10,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 const execFileAsync = promisify(execFile);
 
-import { generateRecipeFilename, getBaseUrl, loadGoogleCredentialsFromBase64 } from './utils/utility-functions';
+import { generateRecipeFilename, getBaseUrl, loadGoogleCredentialsFromBase64, resolveFromRoot } from './utils/utility-functions';
 
 dotenv.config();
 
@@ -18,12 +18,12 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Load system prompt and schema from files
-const tiblsPrompt = fs.readFileSync(path.join(__dirname, 'prompts', 'chatgpt-instructions.md'), 'utf8');
-const tiblsSchema = JSON.parse(fs.readFileSync(path.join(__dirname, 'prompts', 'tibls-schema.json'), 'utf8'));
+const tiblsPrompt = fs.readFileSync(resolveFromRoot('prompts', 'chatgpt-instructions.md'), 'utf8');
+const tiblsSchema = JSON.parse(fs.readFileSync(resolveFromRoot('prompts', 'tibls-schema.json'), 'utf8'));
 
 app.use(bodyParser.json({ limit: '10mb' }));
 const upload = multer();
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(resolveFromRoot('public')));
 
 // This route handles the webhook POST requests
 // It expects a JSON body with an `input` field for a URL; the filename and filetype are used for images/PDFs
@@ -274,7 +274,7 @@ app.get(["/", "/gist/:gistId"], async (req: Request, res: Response) => {
         return { name, description, date, rawJsonUrl, tiblsUrl };
       });
 
-    const template = fs.readFileSync(path.join(__dirname, 'public', 'viewer.html'), 'utf8');
+    const template = fs.readFileSync(resolveFromRoot('public', 'viewer.html'), 'utf8');
     const html = template.replace("{{TABLE_ROWS}}", `
       <div class="recipe-list">
         ${recipes
