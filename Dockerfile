@@ -9,8 +9,11 @@ WORKDIR /app
 
 # Debug: verify ImageMagick executable path
 RUN apt-get update && apt-get install -y imagemagick && \
-    echo "✅ magick path: $(command -v magick)" && \
-    ls -l /usr/bin/magick /usr/local/bin/magick || echo "🔍 'magick' not found in expected locations"
+    echo "🔍 PATH: $PATH" && \
+    echo "🔍 Available 'magick' or related binaries:" && \
+    find / -type f \( -name "magick" -o -name "convert" -o -name "identify" \) 2>/dev/null && \
+    echo "🔍 'magick' version (if available):" && \
+    command -v magick && magick -version || echo "⚠️ 'magick' not found or not executable"
 
 # Copy only package manifests first (these rarely change relative to source code)
 COPY package*.json ./
