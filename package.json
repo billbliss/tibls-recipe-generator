@@ -4,7 +4,7 @@
   "main": "server.ts",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only server.ts",
-    "build": "tsc && mkdir -p dist/prompts && cp -R prompts/* dist/prompts/",
+    "build": "tsc && mkdir -p dist/prompts && cp -R prompts/* dist/prompts/ && mkdir -p dist/public && cp -R public/* dist/public/",
     "start": "node dist/server.js"
   },
   "dependencies": {
