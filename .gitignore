@@ -82,9 +82,13 @@ ngrok.yml
 tmp/
 *.tmp
 
+# Test data
+test-data/
+
 # OS-specific
 .DS_Store
 Thumbs.db
 
 # Google service credentials
-config/tibls-pdf-ocr-7d90a9009aac.json
+config/*.json
+config/*.base64

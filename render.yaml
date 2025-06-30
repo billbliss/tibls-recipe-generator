@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: tibls-recipe-loader
+    env: node
+    buildCommand: npm run build
+    startCommand: npm start
+    plan: free
+    build:
+      packages:
+        - imagemagick

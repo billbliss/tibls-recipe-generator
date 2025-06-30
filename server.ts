@@ -10,7 +10,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 const execFileAsync = promisify(execFile);
 
-import { generateRecipeFilename, cleanupUploads, getBaseUrl } from './utils/utility-functions';
+import { generateRecipeFilename, getBaseUrl, loadGoogleCredentialsFromBase64 } from './utils/utility-functions';
 
 dotenv.config();
 
@@ -34,14 +34,12 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
   const file = req.file;
   const filetype = req.body.filetype;
 
-  cleanupUploads(24 * 60 * 60 * 1000, path.join(__dirname, 'public', 'uploads')); // delete files older than 24 hours
-
   if (!input && file && file.mimetype === 'application/pdf') {
-    const tempPdfPath = path.join(__dirname, 'tmp', `upload-${Date.now()}.pdf`);
+    const tempPdfPath = path.join('/tmp', `upload-${Date.now()}.pdf`);
     fs.mkdirSync(path.dirname(tempPdfPath), { recursive: true });
     fs.writeFileSync(tempPdfPath, file.buffer);
 
-    const pngPath = path.join(__dirname, 'tmp', `page1-${Date.now()}.png`);
+    const pngPath = path.join('/tmp', `page1-${Date.now()}.png`);
     try {
       await execFileAsync('magick', [`${tempPdfPath}[0]`, pngPath]);
     } catch (err) {
@@ -52,8 +50,9 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
     const base64Image = imageBuffer.toString('base64');
 
     // Initialize Vision client
+    loadGoogleCredentialsFromBase64();
     const visionClient = new vision.ImageAnnotatorClient({
-      keyFilename: path.join(__dirname, 'config', process.env.GOOGLE_CLOUD_CREDENTIALS_FILE || 'tibls-pdf-ocr-7d90a9009aac.json')
+      keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS
     });
 
     try {

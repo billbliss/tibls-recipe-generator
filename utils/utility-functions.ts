@@ -39,19 +39,32 @@ export function generateRecipeFilename(tiblsJson: any, appendTimestamp: boolean 
   return `${baseName}${dateSuffix}`;
 }
 
-// Cleans up old uploads by deleting files older than maxAgeMs
-// This function is called from server.ts when the webhook is invoked
-export function cleanupUploads(maxAgeMs: number, directoryPath: string): void {
-  const now = Date.now();
-  fs.readdirSync(directoryPath).forEach(file => {
-    const fullPath = path.join(directoryPath, file);
-    try {
-      const stats = fs.statSync(fullPath);
-      if (now - stats.mtimeMs > maxAgeMs) {
-        fs.unlinkSync(fullPath);
-      }
-    } catch (err) {
-      console.warn(`Failed to delete ${file}:`, err);
+/**
+ * Loads Google Cloud credentials from a base64-encoded source.
+ * - In production: reads from process.env.GOOGLE_CLOUD_CREDENTIALS_BASE64
+ * - In development: falls back to config/tibls-pdf-ocr-7d90a9009aac.base64
+ * Writes the decoded JSON to /tmp/gvision-creds.json and sets GOOGLE_APPLICATION_CREDENTIALS.
+ */
+export function loadGoogleCredentialsFromBase64() {
+  let b64 = process.env.GOOGLE_CLOUD_CREDENTIALS_BASE64;
+
+  if (!b64 && process.env.NODE_ENV !== 'production') {
+    if (!process.env.GOOGLE_CLOUD_CREDENTIALS_BASE64_FILE) {
+      throw new Error('GOOGLE_CLOUD_CREDENTIALS_BASE64_FILE is not set in development mode');
     }
-  });
+    const fallbackPath = path.join(__dirname, String(process.env.GOOGLE_CLOUD_CREDENTIALS_BASE64_FILE));
+    if (fs.existsSync(fallbackPath)) {
+      b64 = fs.readFileSync(fallbackPath, 'utf8');
+    }
+  }
+
+  if (!b64) {
+    throw new Error('Missing GOOGLE_CLOUD_CREDENTIALS_BASE64 and no fallback JSON file GOOGLE_CLOUD_CREDENTIALS_BASE64_FILE found.');
+  }
+
+  const json = Buffer.from(b64, 'base64').toString('utf-8');
+  const credPath = '/tmp/gvision-creds.json';
+  fs.writeFileSync(credPath, json);
+
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = credPath;
 }
