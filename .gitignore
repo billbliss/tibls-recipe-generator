@@ -67,9 +67,10 @@ pids
 *.seed
 *.pid.lock
 
-# Environment variables
+# Ignore all env files except .env.example
 .env
 .env.*
+!.env.example
 
 # VS Code
 .vscode/
