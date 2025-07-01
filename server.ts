@@ -17,12 +17,7 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Debug where files are being resolved from
-// console.log('🐛 cwd:', process.cwd());
-// console.log('🐛 contents of prompts:', fs.readdirSync(path.join(process.cwd(), 'prompts')));
-// console.log('🐛 all files:', fs.readdirSync(process.cwd()));
-
-// Load system prompt and schema from files
+// Load system prompt and schema from source files
 const tiblsPrompt = fs.readFileSync(resolveFromRoot('prompts', 'chatgpt-instructions.md'), 'utf8');
 const tiblsSchema = JSON.parse(fs.readFileSync(resolveFromRoot('prompts', 'tibls-schema.json'), 'utf8'));
 
@@ -52,7 +47,6 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
     }
 
     const imageBuffer = fs.readFileSync(pngPath);
-    const base64Image = imageBuffer.toString('base64');
 
     // Initialize Vision client
     loadGoogleCredentialsFromBase64();
@@ -85,8 +79,6 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
     res.status(400).json({ error: 'Missing or invalid `input` field' });
     return;
   }
-
-  const isUrl = /^https?:\/\//.test(input);
 
   try {
     const chatPayload = {
@@ -144,6 +136,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       }
     }
 
+    // Call OpenAI API with the chat payload
     const openaiRes = await axios.post('https://api.openai.com/v1/chat/completions', chatPayload, {
       headers: {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -151,13 +144,16 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       }
     });
 
+    // Extract the Tibls JSON object from the OpenAI response
     const toolCall = openaiRes.data.choices?.[0]?.message?.tool_calls?.[0];
 
+    // the arguments property of the tool_call contains the Tibls JSON object
     const argsString = toolCall?.function?.arguments;
     if (!argsString) throw new Error('No tool call arguments returned from OpenAI');
 
     const tiblsJson = JSON.parse(argsString);
 
+    // An easy way to generate test data for debugging
     if (process.env.GENERATE_TEST_DATA === 'true') {
       try {
         const outputDir = resolveFromRoot('test-data');
@@ -172,6 +168,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       }
     }
 
+    // Generate a user-friendly filename for the file to be saved in the Gist
     const filename = `${generateRecipeFilename(tiblsJson)}.json`;
     const gistId = process.env.GIST_ID;
     const gistPayload = {
@@ -182,6 +179,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       }
     };
 
+    // Patch the Gist with the new recipe JSON
     await axios.patch(`https://api.github.com/gists/${gistId}`, gistPayload, {
       headers: {
         Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
@@ -232,7 +230,7 @@ app.get("/gist-file/:filename", async (req: Request, res: Response) => {
 
 // This route serves the viewer UI for a specific Gist
 // It fetches the Gist content, extracts recipe files, and generates an HTML page to display them
-// The viewer allows users to import recipes directly into the Tibls app
+// The viewer allows users to import recipes directly into the Tibls app or display the raw JSON
 app.get(["/", "/gist/:gistId"], async (req: Request, res: Response) => {
   const gistId = req.params.gistId || process.env.GIST_ID;
 
@@ -279,6 +277,13 @@ app.get(["/", "/gist/:gistId"], async (req: Request, res: Response) => {
         return { name, description, date, rawJsonUrl, tiblsUrl };
       });
 
+    // Generate the {{TABLE_ROWS}} HTML content dynamically
+    // This is used to populate the viewer page with recipe cards
+    // The template is read from public/viewer.html and the rows are replaced with the generated HTML
+    // Each recipe card includes the name, description, date, and links to import or view raw JSON
+    // The template uses a simple string replacement to insert the rows into the HTML
+    // This allows for easy customization of the viewer page without changing the server code
+    // The viewer page is designed to be simple and responsive, displaying the recipes in a grid
     const template = fs.readFileSync(resolveFromRoot('public', 'viewer.html'), 'utf8');
     const html = template.replace("{{TABLE_ROWS}}", `
       <div class="recipe-list">
