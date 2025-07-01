@@ -11,7 +11,7 @@ It also implements a viewer UI that displays the contents of all the converted r
 
 ## ✨ Features
 
-- ChatGPT API using a very specific instruction script and JSON schema validation
+- Extracts, interprets, and converts recipes in a variety of source formats using ChatGPT
 - 📥 URL and PDF ingestion
 - 🖼️ PDF image handling via Ghostscript and ImageMagick
 - 🔎 OCR via Google Cloud Vision API
@@ -24,6 +24,7 @@ It also implements a viewer UI that displays the contents of all the converted r
 
 ## 🛠️ Technologies
 
+- OpenAI's GPT-4o multimodal capability, which allows seamless handling of both text and images (future-proofing for richer recipe inputs)
 - Node.js version 22
 - TypeScript
 - Express.js
