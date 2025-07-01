@@ -7,7 +7,7 @@
 
 Using ChatGPT, it intelligently parses and transforms recipe data — including structured JSON+LD, scanned PDFs or photos of printed recipes — into a normalized, validated format conforming to the Tibls schema.
 
-It also implements a viewer UI that displays the contents of all the converted recipes or load a new one.
+It also implements a viewer UI that displays the contents of all the converted recipes or lets you load a new one.
 
 ## ✨ Features
 
