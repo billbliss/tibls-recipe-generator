@@ -251,8 +251,7 @@ app.get(["/", "/gist/:gistId"], async (req: Request, res: Response) => {
         const url = file.raw_url;
         const baseUrl = getBaseUrl(req);
         const rawJsonUrl = `${baseUrl}/gist-file/${filename}`;
-        const tiblsUrl = `tibls://tibls.app/import?r=${encodeURIComponent(rawJsonUrl)}`;
-
+        const tiblsUrl = `tibls://tibls.app/import?r=${rawJsonUrl}`;
         let parsed;
         try {
           parsed = JSON.parse(file.content);
