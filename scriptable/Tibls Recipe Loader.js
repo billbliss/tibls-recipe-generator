@@ -9,7 +9,7 @@ const { Script } = require("vm");
 
 // Render version
 let baseUrl = "https://tibls-recipe-generator-ptm9.onrender.com";
-const inShareSheetMode = args.plainTexts || args.urls || args.images || args.fileURLs
+const inShareSheetMode = args.plainTexts || args.urls || args.images || args.fileURLs;
 
 if (!inShareSheetMode) {
   // Just open baseUrl in a Safari tab
