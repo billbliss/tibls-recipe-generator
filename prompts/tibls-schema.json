@@ -59,7 +59,7 @@
             }
           }
         },
-        "required": ["@type", "id", "name", "ingredients", "steps", "summary"]
+        "required": ["@type", "id", "name", "ingredients", "steps", "summary", "calories"]
       }
     }
   },

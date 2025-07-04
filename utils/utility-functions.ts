@@ -77,3 +77,18 @@ export function resolveFromRoot(...segments: string[]): string {
   // console.log("🔍 resolveFromRoot ->", fullPath);
   return fullPath;
 }
+
+// Checks if a string is a valid URL
+// This is used to validate URLs before processing them
+// It uses the URL constructor to parse the string and checks if the protocol is http or https
+// Returns true if the string is a valid URL, false otherwise
+// Example: isUrl('https://example.com') returns true, isUrl('invalid-url') returns false
+// Note: This function trims the input string before validation to handle leading/trailing whitespace
+export function isUrl(input: string): boolean {
+  try {
+    const url = new URL(input.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}

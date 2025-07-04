@@ -8,9 +8,10 @@ import multer from 'multer';
 import vision from '@google-cloud/vision';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import * as cheerio from 'cheerio';
 const execFileAsync = promisify(execFile);
 
-import { generateRecipeFilename, getBaseUrl, loadGoogleCredentialsFromBase64, resolveFromRoot } from './utils/utility-functions';
+import { generateRecipeFilename, getBaseUrl, loadGoogleCredentialsFromBase64, resolveFromRoot, isUrl } from './utils/utility-functions';
 
 dotenv.config();
 
@@ -78,6 +79,59 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
   if (!input || typeof input !== 'string') {
     res.status(400).json({ error: 'Missing or invalid `input` field' });
     return;
+  }
+
+  if (isUrl(input)) {
+    const recipeUrl = input.trim();
+    try {
+      const rawHtml = (await axios.get(recipeUrl)).data;
+      const $ = cheerio.load(rawHtml);
+
+      // Extract and filter <head> and <body> HTML for minimal relevant content
+      let head = $('head').clone();
+      head.find([
+        'script',
+        'style',
+        'link[rel="stylesheet"]',
+        'link[rel*="icon"]',
+        'link[rel*="pre"]'
+      ].join(',')).remove();
+
+      // Additional cleanup for <body> to remove scripts, styles, layout, cookies, and ad-related elements
+      $('body').find([
+        'script',
+        'style',
+        'footer',
+        'nav',
+        'aside',
+        '[class*="cookie"]',
+        '[id*="cookie"]',
+        '[class*="ad"]',
+        '[id*="ad"]'
+      ].join(',')).remove();
+      // Remove empty <div> and <span> elements
+      $('body').find('div:empty, span:empty').remove();
+      // Remove any comments
+      $('body').contents().each((_, el) => {
+        if (el.type === 'comment') $(el).remove();
+      });
+
+      const body = $('body').html() || '';
+      const headHtml = head.html() || '';
+
+      let minimalHtml = `<!DOCTYPE html>
+        <html>
+          <head>${headHtml}</head>
+          <body>${body}</body>
+        </html>`.replace(/[\u0000-\u001F\u007F]/g, ''); // strip control characters
+
+      const maxHtmlChars = 100_000;
+      input = `HTML source for ${recipeUrl}:\n\n${minimalHtml.slice(0, maxHtmlChars)}`;
+    } catch (err) {
+      console.error('Failed to fetch HTML for URL:', err);
+      res.status(500).json({ error: 'Failed to fetch page HTML from URL' });
+      return;
+    }
   }
 
   try {

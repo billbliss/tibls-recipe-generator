@@ -20,6 +20,41 @@ Convert any provided recipe (from a URL, PDF, or image) into valid Tibls JSON as
 - Parse structured data into Tibls JSON, supplementing missing fields from page content or metadata.
 - If summary or other required fields are missing, generate them and add a note to `notes[]`.
 
+### 1a: Metadata Extraction from `<head>`
+
+When extracting metadata from a webpage:
+
+- Always parse the `<head>` section in addition to the `<body>`.
+- Specifically extract `<meta property="og:image" content="...">`.
+  - If present and the `content` value is a valid absolute URL pointing to an image (`.jpg`, `.jpeg`, `.png`, `.webp`), use it as the value of `ogImageUrl`.
+  - Do not guess or synthesize `ogImageUrl` based on known domain patterns; only use values explicitly found in the page metadata or structured data.
+- If no valid `og:image` tag is found and the JSON-LD data also lacks a valid `"image"` field:
+  - Set `ogImageUrl` to `null` or omit it entirely.
+  - Add a note to `notes[]`:
+    ```json
+    { "text": "No og:image or JSON-LD image found; ogImageUrl left unset." }
+    ```
+
+If multiple `og:image` tags are present, prefer the first valid one.
+
+This step ensures the image metadata is reliable and prevents hallucinated values from being used.
+
+### 📥 Step 1b: Handling Full HTML Input
+
+If the user input includes a full HTML document (e.g., prefixed with "HTML source for https://example.com"):
+	•	Parse both the <head> and <body> sections.
+	•	Extract metadata from <meta> tags in the <head>, including:
+	•	og:image → ogImageUrl
+	•	og:title (for validation only)
+	•	Set the following fields in the Tibls JSON:
+	•	urlSource = full URL provided
+	•	urlHost = domain extracted from URL (e.g., example.com)
+	•	Do not guess these values — only populate them if the input includes either:
+	•	A valid https://... URL on its own
+	•	Or full HTML source that includes such a URL
+
+If input includes an HTML block prefixed with HTML source for https://..., treat that as the canonical origin of all content and metadata, including urlSource, urlHost, and ogImageUrl.
+
 **If given a PDF or image:**
 - Use OCR to extract text if needed.
 - Identify and segment: title, ingredients, instructions, time values, servings, and metadata.
@@ -29,7 +64,26 @@ Convert any provided recipe (from a URL, PDF, or image) into valid Tibls JSON as
 
 ---
 
-## 📦 Step 2: Tibls JSON Construction
+## 🧮 Step 2: Calorie Estimation (Always Include)
+
+Always include a top-level `calories` field.
+
+- If the recipe includes a stated calorie count, use it.
+- If not, estimate total calories using typical values for raw ingredients:
+  1. Group by ingredient type (e.g., flour, butter, sugar, eggs).
+  2. Estimate based on standard raw ingredient values.
+  3. Round to the nearest 100 kcal.
+  4. Add a `notes[]` entry summarizing the estimate.
+
+- If calorie estimation is not feasible (e.g., insufficient detail or ambiguous quantities):
+  - Set `calories: 0` (never use `null`)
+  - Add a note explaining why estimation was skipped
+
+This ensures the `calories` field is always present and explicitly defined.
+
+---
+
+## 📦 Step 3: Tibls JSON Construction
 
 Each recipe object must include:
 - `@type`: `"https://tibls.app/types/recipe"`
@@ -38,24 +92,15 @@ Each recipe object must include:
 - `ingredients[]`: Array of ingredient objects
 - `steps[]`: Array of step objects
 - `summary`: Concise overview (always present)
+- `calories`: Always include, even if it's 0
 
 **Optional fields:**  
-`urlSource`, `urlHost`, `created`, `updated`, `lastCooked`, `lastQueued`, `cookCount`, `prepTime`, `cookTime`, `totalTime`, `servings`, `calories`, `ogImageUrl`, `notes[]`
+`urlSource`, `urlHost`, `created`, `updated`, `lastCooked`, `lastQueued`, `cookCount`, `prepTime`, `cookTime`, `totalTime`, `servings`, `ogImageUrl`, `notes[]`
 
 **Notes:**
 - If any required field is missing, extract or generate it and explain in `notes[]`.
 - If calorie count is missing, estimate it (see Step 3) and add a note.
 - Always include a `notes[]` entry for any inferred, estimated, or post-processed value.
-
----
-
-## 🧮 Step 3: Calorie Estimation (If Needed)
-
-If calories are not provided:
-1. Estimate total calories using typical values for raw ingredients.
-2. Group by ingredient type.
-3. Round to the nearest 100 kcal.
-4. Add a `calories` field and a note summarizing the estimate in `notes[]`.
 
 ---
 
@@ -110,3 +155,24 @@ Example:
 - No `null`, `undefined`, or placeholder values.
 - If any value is generated or inferred, explain in `notes[]`.
 - Output must be strictly valid JSON and fully conform to the schema.
+
+---
+
+## 🔖 Final Output Checklist
+
+Before returning the Tibls JSON, ensure the following:
+
+- All required fields are present:
+  - `@type`
+  - `id`
+  - `name`
+  - `ingredients`
+  - `steps`
+  - `summary`
+  - `calories`
+- `calories` is always included:
+  - Estimated if possible
+  - Set to `0` if not estimable, with an explanatory note in `notes[]`
+- `notes[]` includes entries for all inferred, estimated, or post-processed values
+
+Failure to include these fields will result in invalid output.
