@@ -14,7 +14,7 @@ if (args.plainTexts || args.urls || args.images || args.fileURLs) {
   baseUrl = `${baseUrl}/webhook`;
 } else {
   // Just open baseUrl in a Safari tab
-  Safari.open("baseUrl");
+  Safari.open(baseUrl);
   return;
 }
 
