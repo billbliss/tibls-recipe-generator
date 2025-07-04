@@ -7,18 +7,17 @@
 
 // Render version
 let baseUrl = "https://tibls-recipe-generator-ptm9.onrender.com";
+const inShareSheetMode = args.plainTexts || args.urls || args.images || args.fileURLs
 
-async function main() {
-  if (args.plainTexts || args.urls || args.images || args.fileURLs) {
-    // Script is being invoked via Share Sheet
-    // baseUrl is a webhook; append "/webhook" to it
-    baseUrl = `${baseUrl}/webhook`;
-  } else {
-    // Just open baseUrl in a Safari tab
-    Safari.open(baseUrl);
-    Script.complete();
-    return;
-  }
+if (!inShareSheetMode) {
+  // Just open baseUrl in a Safari tab
+  Safari.open(baseUrl);
+  return;
+} 
+else {
+  // Script is being invoked via Share Sheet
+  // baseUrl is a webhook; append "/webhook" to it
+  baseUrl = `${baseUrl}/webhook`;
 
   // Default schema values
   let input = "";
@@ -87,6 +86,3 @@ async function main() {
     await alert.present();
   }
 }
-
-// Run the main function
-await main();
