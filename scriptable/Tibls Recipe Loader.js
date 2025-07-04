@@ -2,8 +2,6 @@
 // These must be at the very top of the file. Do not edit.
 // icon-color: purple; icon-glyph: edit; share-sheet-inputs: file-url, url, image;
 
-const { Script } = require("vm");
-
 // ngrok (localhost) version
 // let baseUrl = "https://442e-50-237-200-190.ngrok-free.app"
 
