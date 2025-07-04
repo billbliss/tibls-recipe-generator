@@ -16,6 +16,7 @@ async function main() {
   } else {
     // Just open baseUrl in a Safari tab
     Safari.open(baseUrl);
+    Script.complete();
     return;
   }
 
