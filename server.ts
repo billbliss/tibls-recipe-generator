@@ -367,3 +367,9 @@ app.get(["/", "/gist/:gistId"], async (req: Request, res: Response) => {
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
+
+// More graceful shutdown handling
+process.on('SIGTERM', () => {
+  console.log('Received SIGTERM, shutting down...');
+  process.exit(0);
+});

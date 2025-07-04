@@ -3,10 +3,20 @@
 // icon-color: purple; icon-glyph: edit; share-sheet-inputs: file-url, url, image;
 
 // ngrok (localhost) version
-// const webhookURL = "https://442e-50-237-200-190.ngrok-free.app/webhook"
+// let baseUrl = "https://442e-50-237-200-190.ngrok-free.app"
 
-// Renderversion
-const webhookURL = "https://tibls-recipe-generator-ptm9.onrender.com/webhook";
+// Render version
+let baseUrl = "https://tibls-recipe-generator-ptm9.onrender.com";
+
+if (args.plainTexts || args.urls || args.images || args.fileURLs) {
+  // Script is being invoked via Share Sheet
+  // baseUrl is a webhook; append "/webhook" to it
+  baseUrl = `${baseUrl}/webhook`;
+} else {
+  // Just open baseUrl in a Safari tab
+  Safari.open("baseUrl");
+  return;
+}
 
 // Default schema values
 let input = "";
@@ -51,7 +61,7 @@ const payload = {
   filetype,
   base64
 };
-let req = new Request(webhookURL);
+let req = new Request(baseUrl);
 req.method = "POST";
 req.headers = { "Content-Type": "application/json" };
 req.body = JSON.stringify(payload);
