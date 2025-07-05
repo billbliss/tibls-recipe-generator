@@ -87,46 +87,42 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       const rawHtml = (await axios.get(recipeUrl)).data;
       const $ = cheerio.load(rawHtml);
 
-      // Extract and filter <head> and <body> HTML for minimal relevant content
+      // Extract and filter <head> HTML for minimal relevant content
+      // Preserve ld+json scripts that contain recipe data
+      // Remove other styles, scripts, layout elements, and ads
       let head = $('head').clone();
+      head.find('script[type="application/ld+json"]').each((_, el) => {
+        const scriptContent = $(el).text().trim();
+        try {
+          const json = JSON.parse(scriptContent);
+          const items = Array.isArray(json) ? json : [json];
+          const isRecipe = items.some(item =>
+            item['@type'] === 'Recipe' ||
+            (Array.isArray(item['@type']) && item['@type'].includes('Recipe')) ||
+            item.recipeIngredient || item.recipeInstructions
+          );
+          if (!isRecipe) $(el).remove();
+        } catch (err) {
+          $(el).remove(); // Remove if not valid JSON
+        }
+      });
+
       head.find([
-        'script',
         'style',
         'link[rel="stylesheet"]',
         'link[rel*="icon"]',
         'link[rel*="pre"]'
       ].join(',')).remove();
 
-      // Additional cleanup for <body> to remove scripts, styles, layout, cookies, and ad-related elements
-      $('body').find([
-        'script',
-        'style',
-        'footer',
-        'nav',
-        'aside',
-        '[class*="cookie"]',
-        '[id*="cookie"]',
-        '[class*="ad"]',
-        '[id*="ad"]'
-      ].join(',')).remove();
-      // Remove empty <div> and <span> elements
-      $('body').find('div:empty, span:empty').remove();
-      // Remove any comments
-      $('body').contents().each((_, el) => {
-        if (el.type === 'comment') $(el).remove();
-      });
-
-      const body = $('body').html() || '';
       const headHtml = head.html() || '';
+      input = `HTML metadata for ${recipeUrl}:
+        ${headHtml}
 
-      let minimalHtml = `<!DOCTYPE html>
-        <html>
-          <head>${headHtml}</head>
-          <body>${body}</body>
-        </html>`.replace(/[\u0000-\u001F\u007F]/g, ''); // strip control characters
+        ---
 
-      const maxHtmlChars = 100_000;
-      input = `HTML source for ${recipeUrl}:\n\n${minimalHtml.slice(0, maxHtmlChars)}`;
+        Please fetch and parse the full recipe from the above URL.
+        Use the provided <head> metadata only if the page does not include one 
+        or if network access is restricted.`;
     } catch (err) {
       console.error('Failed to fetch HTML for URL:', err);
       res.status(500).json({ error: 'Failed to fetch page HTML from URL' });

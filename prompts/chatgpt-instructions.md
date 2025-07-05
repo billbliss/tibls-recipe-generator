@@ -15,10 +15,14 @@ Convert any provided recipe (from a URL, PDF, or image) into valid Tibls JSON as
 ## 📥 Step 1: Source Type Handling
 
 **If given a URL:**
-- Extract JSON-LD data (Schema.org `Recipe`) if available.
+- Extract JSON-LD data (Schema.org `Recipe`) if available. Use it only if it includes a complete and accurate ingredient list and step-by-step instructions.
+- If the structured data is incomplete (e.g., missing ingredients, quantities, or steps), ignore it and instead parse the visible recipe content directly from the DOM.
 - Prefer `og:image` (or `twitter:image`) as the recipe image if it's a clear food photo; otherwise, heuristically select a main food photo.
 - Parse structured data into Tibls JSON, supplementing missing fields from page content or metadata.
 - If summary or other required fields are missing, generate them and add a note to `notes[]`.
+- Always record whether JSON-LD was used or rejected in a `notes[]` entry.
+- The term `urlSource` refers to the original recipe page URL being processed. It should match the URL included in the prompt (e.g., "HTML metadata for https://...") and must be included in the final JSON output.
+- When a valid recipe URL is provided (as `urlSource`), always retrieve and parse the full page content — regardless of whether `<head>` metadata is separately provided. Do not assume the `<head>` alone is sufficient.
 
 ### 1a: Metadata Extraction from `<head>`
 
@@ -39,21 +43,6 @@ If multiple `og:image` tags are present, prefer the first valid one.
 
 This step ensures the image metadata is reliable and prevents hallucinated values from being used.
 
-### 📥 Step 1b: Handling Full HTML Input
-
-If the user input includes a full HTML document (e.g., prefixed with "HTML source for https://example.com"):
-	•	Parse both the <head> and <body> sections.
-	•	Extract metadata from <meta> tags in the <head>, including:
-	•	og:image → ogImageUrl
-	•	og:title (for validation only)
-	•	Set the following fields in the Tibls JSON:
-	•	urlSource = full URL provided
-	•	urlHost = domain extracted from URL (e.g., example.com)
-	•	Do not guess these values — only populate them if the input includes either:
-	•	A valid https://... URL on its own
-	•	Or full HTML source that includes such a URL
-
-If input includes an HTML block prefixed with HTML source for https://..., treat that as the canonical origin of all content and metadata, including urlSource, urlHost, and ogImageUrl.
 
 **If given a PDF or image:**
 - Use OCR to extract text if needed.
@@ -75,9 +64,10 @@ Always include a top-level `calories` field.
   3. Round to the nearest 100 kcal.
   4. Add a `notes[]` entry summarizing the estimate.
 
-- If calorie estimation is not feasible (e.g., insufficient detail or ambiguous quantities):
+- If calorie estimation is not feasible (e.g., fewer than 3 ingredients with measurable quantities or ambiguous unit types):
   - Set `calories: 0` (never use `null`)
-  - Add a note explaining why estimation was skipped
+  - Add a `notes[]` entry explaining exactly what information was missing that prevented estimation
+  - Do not skip estimation solely because some ingredients are missing; use all measurable ones to form a partial estimate when possible
 
 This ensures the `calories` field is always present and explicitly defined.
 
@@ -106,25 +96,52 @@ Each recipe object must include:
 
 ## 👨‍🍳 Step 4: Ingredient Handling
 
-Each ingredient:
-```json
-{ "text": "2 cups flour", "sectionHeader": "Dough" }
-```
-- Always include `sectionHeader`; only the first in a group gets a value, others get `""`.
-- Use original units, with alternates in parentheses if appropriate.
+When building the `ingredients[]` list:
+
+- If a valid and complete JSON-LD Recipe object is present (including all `recipeIngredient` values with quantities), use it as the authoritative source for `ingredients[]`. Skip all fallback rules below.
+
+- If JSON-LD is missing or incomplete:
+  - Extract every ingredient mentioned anywhere in the recipe, even if it appears only in instructions or narrative text.
+  - If a visually structured ingredient list exists in the DOM, treat it as the primary source. Only use JSON-LD if it matches this list exactly.
+  - Do not assume all ingredients appear in a dedicated list — capture any mentioned item that contributes flavor, texture, or function.
+  - Include ingredients used solely for preparation, such as brushing oil, garlic for rubbing, or finishing garnishes (e.g., flaky salt).
+  - Always include flavor base ingredients used to infuse simmering liquids (e.g., onion, celery, carrot, herbs, pancetta), even if strained out.
+  - If an ingredient is used in multiple forms (e.g., garlic rubbed and minced), create separate entries for each form.
+
+Once all ingredients are identified:
+
+- Format each entry as:
+  ```json
+  { "text": "2 cups flour", "sectionHeader": "Dough" }
+  ```
+- Use the original unit system from the recipe (imperial or metric), with alternate units in parentheses if helpful.
+- Set `sectionHeader` for the first ingredient in each logical group; all others should have `""`.
+- Maintain exact quantities and units unless the source gives a range (use the lower bound and add a note).
+- Do not substitute, summarize, or normalize (e.g., don’t convert “1 cup dried chickpeas” into “1 lb canned”).
+- If a substitution is explicitly listed, choose the first form and mention the alternate in `notes[]`.
 
 ---
 
 ## 🍳 Step 5: Step Handling
 
-Each step:
-```json
-{ "text": "Bake for 30 minutes at 350°F.", "sectionHeader": "Bake", "time": 1800 }
-```
-- Use `sectionHeader` only on the first step of a group.
-- If a step includes a time range, use the lower bound and add a note.
-- For per-side or flipping instructions with a total time, set `time` to the full duration and add `flipTime` (half of total, rounded).
-- Add a note to `notes[]` when `flipTime` is inferred.
+When extracting `steps[]`, prioritize full coverage of all preparation, cooking, and assembly actions — even if some are mentioned only in prose or assumed from ingredient usage.
+
+- Do not omit or merge operations; capture each distinct action as its own step.
+- Include any step that affects the final dish: brushing, rubbing, soaking, garnishing, straining, resting, etc.
+- Include steps for components that are later discarded (e.g., simmering aromatics).
+
+Once all steps are identified:
+
+- Format each as:
+  ```json
+  { "text": "Bake for 30 minutes at 350°F.", "sectionHeader": "Bake", "time": 1800 }
+  ```
+- Assign `sectionHeader` to the first step of each logical group; others should have `""`.
+- Only include the `time` field for steps with a measurable duration (in seconds).
+- For time ranges, use the lower bound and add a `notes[]` entry noting the range.
+- If a step includes per-side or flipping instructions, set `time` to the full total, and include `flipTime` (half of `time`, rounded).
+- Do not collapse multi-part operations into one step (e.g., “make chickpea puree” should not include soaking, cooking, and blending).
+- Preserve order of operations and ensure each step is directly actionable and matches the original tone and structure.
 
 ---
 
@@ -155,6 +172,9 @@ Example:
 - No `null`, `undefined`, or placeholder values.
 - If any value is generated or inferred, explain in `notes[]`.
 - Output must be strictly valid JSON and fully conform to the schema.
+- If structured data and visible recipe disagree significantly on ingredient count or content, log a warning and fallback to DOM content
+- Consider flagging recipes with fewer than 5 ingredients for manual review if the visible recipe is more complex.
+- Verify that all ingredients mentioned in the original source text appear in the `ingredients[]` list with correct quantities. Do not assume minor items can be omitted.
 
 ---
 
