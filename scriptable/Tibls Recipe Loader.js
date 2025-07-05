@@ -3,11 +3,10 @@
 // icon-color: purple; icon-glyph: edit; share-sheet-inputs: file-url, url, image;
 
 // ngrok (localhost) version
-// let webhookUrl = "https://442e-50-237-200-190.ngrok-free.app/webhook";
+// const webhookUrl = "https://c58f-76-22-26-231.ngrok-free.app/webhook";
 
 // Render version
-let webhookUrl = "https://tibls-recipe-generator-ptm9.onrender.com/webhook";
-const inShareSheetMode = args.plainTexts || args.urls || args.images || args.fileURLs;
+const webhookUrl = "https://tibls-recipe-generator-ptm9.onrender.com/webhook";
 
 // Default schema values
 let input = "";

@@ -43,7 +43,6 @@ If multiple `og:image` tags are present, prefer the first valid one.
 
 This step ensures the image metadata is reliable and prevents hallucinated values from being used.
 
-
 **If given a PDF or image:**
 - Use OCR to extract text if needed.
 - Identify and segment: title, ingredients, instructions, time values, servings, and metadata.
