@@ -95,9 +95,10 @@ Each recipe object must include:
 
 ## 👨‍🍳 Step 4: Ingredient Handling
 
-When building the `ingredients[]` list:
-
-- If a valid and complete JSON-LD Recipe object is present (including all `recipeIngredient` values with quantities), use it as the authoritative source for `ingredients[]`. Skip all fallback rules below.
+- **Important:** When JSON-LD is available and complete, ingredients must be used as-is with no substitutions, expansions, or simplification. They are considered ground truth.
+  - If the prompt includes `recipeIngredient[]` from a complete JSON-LD block, use it as the authoritative source for `ingredients[]`. Do **not** regenerate, reword, reformat, or cross-check ingredients against the rest of the page. Use the provided `recipeIngredient[]` values *literally and exclusively*.
+  - If a valid and complete JSON-LD `Recipe` object is present (with all `recipeIngredient` values and quantities), use it as the authoritative source for `ingredients[]`. Do not regenerate, rewrite, reformat, or substitute ingredient text in any way. Preserve the ingredients exactly as listed in the JSON-LD data. Skip all fallback logic below in this case.
+  - Do not reference visible content to revise or validate these ingredients. Do not remove, rephrase, or infer any part of the text. Use the `recipeIngredient[]` array literally and exclusively.
 
 - If JSON-LD is missing or incomplete:
   - Extract every ingredient mentioned anywhere in the recipe, even if it appears only in instructions or narrative text.

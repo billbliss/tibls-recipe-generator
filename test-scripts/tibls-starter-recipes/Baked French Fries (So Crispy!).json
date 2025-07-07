@@ -1,0 +1,83 @@
+{
+  "itemListElement": [
+    {
+      "calories": 208,
+      "updated": 978307200,
+      "totalTime": 45,
+      "lastQueued": 0,
+      "notes": [],
+      "cookCount": 0,
+      "servings": 3,
+      "urlSource": "https:\/\/www.acouplecooks.com\/baked-french-fries\/",
+      "@type": "https:\/\/tibls.app\/types\/recipe",
+      "steps": [
+        {
+          "sectionHeader": "",
+          "text": "Preheat the oven to 425 degrees Fahrenheit. Evenly space the oven racks to ensure even cooking."
+        },
+        {
+          "text": "(Watch this video or use a fry cutter.) Wash the potatoes, leaving the skins on. Slice off the ends of each potato, then slice off part of the side to make a base. Place the potato half cut side down and cut off a 3\/8-inch slice, then lay the slice on its side and cut it into several long strips. Repeat until all potatoes have been cut into fries. The pieces can be uneven, but aim for as uniform of thickness as possible. See the video for full instructions!",
+          "sectionHeader": ""
+        },
+        {
+          "sectionHeader": "",
+          "text": "Place the cut fries into a medium bowl and rinse with cold water until water is clear. Then fill the bowl with cold water and allow to rest for 10 minutes (while the oven preheats). Then drain the potatoes and dry them thoroughly with a clean dish towel.",
+          "time": 600
+        },
+        {
+          "sectionHeader": "",
+          "text": "Add the fries to a dry bowl and toss them with the olive oil, smoked paprika, garlic powder, Old Bay, black pepper, and kosher salt. Line two baking sheets with parchment paper. Spread the fries in straight lines on the paper, placing them as far apart as possible."
+        },
+        {
+          "sectionHeader": "",
+          "text": "Bake the fries for 20 minutes. Take them out of the oven and carefully flip each fry. Return to oven (reversing the pans on top and bottom racks). Bake additional 8 to 10 minutes until they are crisp and golden brown, watching carefully as the bake time depends on the fry thickness and your oven. (If the majority of the fries seem soft, continue to bake a few more minutes.)",
+          "time": 1200
+        },
+        {
+          "sectionHeader": "",
+          "text": "Taste and add a few more pinches salt if desired. Serve immediately for the best texture and flavor."
+        }
+      ],
+      "name": "Baked French Fries (So Crispy!)",
+      "lastCooked": 0,
+      "urlHost": "www.acouplecooks.com",
+      "id": "F664D7A0-36D0-4300-A26A-09F15EC5BC37",
+      "ogImageUrl": "https:\/\/www.acouplecooks.com\/wp-content\/uploads\/2020\/07\/Seasoned-Fries-001.jpg",
+      "summary": "These are the best oven baked French fries that taste just like a restaurant! They come out crispy and perfectly seasoned: no need for frying.",
+      "created": 1750098248.096941,
+      "cookTime": 30,
+      "ingredients": [
+        {
+          "text": "2 large russet potatoes (1 1\/2  to 1 3\/4 pounds)*",
+          "sectionHeader": ""
+        },
+        {
+          "text": "2 tablespoons olive oil",
+          "sectionHeader": ""
+        },
+        {
+          "sectionHeader": "",
+          "text": "1\/2 teaspoon smoked paprika"
+        },
+        {
+          "text": "1\/2 teaspoon garlic powder",
+          "sectionHeader": ""
+        },
+        {
+          "sectionHeader": "",
+          "text": "1\/2 teaspoon Old Bay seasoning (purchased or homemade)"
+        },
+        {
+          "text": "1\/4 teaspoon ground black pepper",
+          "sectionHeader": ""
+        },
+        {
+          "sectionHeader": "",
+          "text": "1\/2 teaspoon kosher salt"
+        }
+      ],
+      "prepTime": 15
+    }
+  ],
+  "@type": "application\/tibls+json"
+}

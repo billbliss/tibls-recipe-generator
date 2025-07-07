@@ -8,10 +8,14 @@ import multer from 'multer';
 import vision from '@google-cloud/vision';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+
 import * as cheerio from 'cheerio';
 const execFileAsync = promisify(execFile);
 
-import { generateRecipeFilename, getBaseUrl, loadGoogleCredentialsFromBase64, resolveFromRoot, isUrl } from './utils/utility-functions';
+import { createLogger } from './utils/utility-functions';
+const { log, error, close } = createLogger('server-log.txt');
+
+import { generateRecipeFilename, getBaseUrl, loadGoogleCredentialsFromBase64, resolveFromRoot, isUrl, fetchWithRetry } from './utils/utility-functions';
 
 dotenv.config();
 
@@ -34,6 +38,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
   let input = req.body.input;
   const file = req.file;
   const filetype = req.body.filetype;
+  const testMode = (req.body.testMode === true);
 
   if (!input && file && file.mimetype === 'application/pdf') {
     const tempPdfPath = path.join('/tmp', `upload-${Date.now()}.pdf`);
@@ -84,24 +89,48 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
   if (isUrl(input)) {
     const recipeUrl = input.trim();
     try {
-      const rawHtml = (await axios.get(recipeUrl)).data;
+      const rawHtml = (await fetchWithRetry(recipeUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (TiblsRecipeLoaderBot; +https://tibls.app)',
+          'Accept-Language': 'en-US,en;q=0.9'
+        }
+      })).data;
       const $ = cheerio.load(rawHtml);
 
       // Extract and filter <head> HTML for minimal relevant content
       // Preserve ld+json scripts that contain recipe data
       // Remove other styles, scripts, layout elements, and ads
       let head = $('head').clone();
+      let extractedJsonLd: any = null;
+
+      const ldScripts = head.find('script[type="application/ld+json"]');
+
       head.find('script[type="application/ld+json"]').each((_, el) => {
         const scriptContent = $(el).text().trim();
         try {
           const json = JSON.parse(scriptContent);
-          const items = Array.isArray(json) ? json : [json];
-          const isRecipe = items.some(item =>
-            item['@type'] === 'Recipe' ||
-            (Array.isArray(item['@type']) && item['@type'].includes('Recipe')) ||
-            item.recipeIngredient || item.recipeInstructions
-          );
-          if (!isRecipe) $(el).remove();
+          const items = Array.isArray(json)
+            ? json
+            : json['@graph']
+              ? json['@graph']
+              : [json];
+
+          const recipeItem = items.find((item: Record<string, any>, index: number) => {
+            const type = item['@type'];
+            const isRecipe =
+              type === 'Recipe' ||
+              (Array.isArray(type) && type.includes('Recipe')) ||
+              item.recipeIngredient || item.recipeInstructions;
+            return isRecipe;
+          });
+
+          if (recipeItem && !extractedJsonLd) {
+            extractedJsonLd = recipeItem;
+          }
+
+          if (!recipeItem) {
+            $(el).remove();
+          }
         } catch (err) {
           $(el).remove(); // Remove if not valid JSON
         }
@@ -115,16 +144,30 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       ].join(',')).remove();
 
       const headHtml = head.html() || '';
-      input = `HTML metadata for ${recipeUrl}:
+
+      if (extractedJsonLd) {
+        input = `This page contains valid Schema.org JSON-LD recipe data. Use it as the authoritative source for ingredients. Do not modify them.
+
+        URL: ${recipeUrl}
+
+        Extracted JSON-LD:
+        ${JSON.stringify(extractedJsonLd, null, 2)}
+
+        ---
+
+        Fallback HTML <head> metadata (only for summary, missing field(s), or context use):
+        ${headHtml}`;
+      } else {
+        log('📎 Fallback mode: No valid JSON-LD recipe found. Prompting model to parse HTML.');
+        input = `HTML metadata for ${recipeUrl}:
         ${headHtml}
 
         ---
 
-        Please fetch and parse the full recipe from the above URL.
-        Use the provided <head> metadata only if the page does not include one 
-        or if network access is restricted.`;
+        Please fetch and parse the full recipe from the above URL.`;
+      } 
     } catch (err) {
-      console.error('Failed to fetch HTML for URL:', err);
+      error('Failed to fetch HTML for URL:', err);
       res.status(500).json({ error: 'Failed to fetch page HTML from URL' });
       return;
     }
@@ -161,13 +204,13 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
     };
 
     if (!process.env.OPENAI_API_KEY) {
-      console.error('Missing OpenAI API key');
+      error('Missing OpenAI API key');
       res.status(500).json({ error: 'Missing OpenAI API key' });
       return;
     }
 
     if (!process.env.GITHUB_TOKEN || !process.env.GIST_ID) {
-      console.error('Missing GitHub credentials');
+      error('Missing GitHub credentials');
       res.status(500).json({ error: 'Missing GitHub token or Gist ID' });
       return;
     }
@@ -179,10 +222,9 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
 
         const payloadPath = path.join(debugDir, `chatPayload-${Date.now()}.json`);
         fs.writeFileSync(payloadPath, JSON.stringify(chatPayload, null, 2), "utf8");
-
-        console.log(`Chat payload written to ${payloadPath}`);
+        log(`Chat payload written to ${payloadPath}`);
       } catch (err) {
-        console.error("Failed to write chatPayload:", err);
+        error("Failed to write chatPayload:", err);
       }
     }
 
@@ -211,37 +253,41 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
 
         const outPath = path.join(outputDir, `${generateRecipeFilename(tiblsJson, false)}-chatGPT-response.json`);
         fs.writeFileSync(outPath, JSON.stringify(openaiRes.data, null, 2), "utf8");
-
-        console.log(`Test data written to ${outPath}`);
+        log(`Test data written to ${outPath}`);
       } catch (err) {
-        console.error("Failed to write test data:", err);
+        error("Failed to write test data:", err);
       }
     }
 
-    // Generate a user-friendly filename for the file to be saved in the Gist
-    const filename = `${generateRecipeFilename(tiblsJson)}.json`;
-    const gistId = process.env.GIST_ID;
-    const gistPayload = {
-      files: {
-        [filename]: {
-          content: JSON.stringify(tiblsJson, null, 2)
+    if (!testMode) {
+      // Generate a user-friendly filename for the file to be saved in the Gist
+      const filename = `${generateRecipeFilename(tiblsJson)}.json`;
+      const gistId = process.env.GIST_ID;
+      const gistPayload = {
+        files: {
+          [filename]: {
+            content: JSON.stringify(tiblsJson, null, 2)
+          }
         }
-      }
-    };
+      };
 
-    // Patch the Gist with the new recipe JSON
-    await axios.patch(`https://api.github.com/gists/${gistId}`, gistPayload, {
-      headers: {
-        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'Tibls-Webhook-Handler'
-      }
-    });
+      // Patch the Gist with the new recipe JSON
+      await axios.patch(`https://api.github.com/gists/${gistId}`, gistPayload, {
+        headers: {
+          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'Tibls-Webhook-Handler'
+        }
+      });
 
-    const viewerUrl = `${getBaseUrl(req)}/gist/${gistId}`;
-    res.json({ status: 'queued', viewer: viewerUrl });
+      const viewerUrl = `${getBaseUrl(req)}/gist/${gistId}`;
+      res.json({ status: 'queued', viewer: viewerUrl });
+    } else {
+      // In test mode, return the Tibls JSON directly without saving to Gist
+      res.json(tiblsJson);
+    }
   } catch (err: any) {
-    console.error('Error:', err);
+    error('Error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -273,7 +319,7 @@ app.get("/gist-file/:filename", async (req: Request, res: Response) => {
     res.setHeader("Content-Type", "application/json");
     res.send(file.content);
   } catch (err) {
-    console.error("Error fetching Gist file:", err);
+    error("Error fetching Gist file:", err);
     res.status(500).send("Failed to retrieve file");
   }
 });
@@ -354,7 +400,7 @@ app.get(["/", "/gist/:gistId"], async (req: Request, res: Response) => {
 
     res.send(html);
   } catch (err: any) {
-    console.error("Error fetching Gist:", err);
+    error("Error fetching Gist:", err);
     res.status(500).send("Error loading recipe viewer.");
   }
 });
@@ -367,5 +413,12 @@ app.listen(port, () => {
 // More graceful shutdown handling
 process.on('SIGTERM', () => {
   console.log('Received SIGTERM, shutting down...');
+  close(); // Close the logger stream
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('Received SIGINT (Ctrl+C), shutting down...');
+  close(); // flush and close the log file
   process.exit(0);
 });

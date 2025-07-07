@@ -1,8 +1,10 @@
 // File: utils/utility-functions.ts - Utility functions for Tibls Recipe Generator
 
 import fs from 'fs';
+import { createWriteStream } from 'fs';
 import path from 'path';
 import { Request } from 'express';
+import axios from 'axios';
 
 // Returns the base URL of the request, used for generating absolute URLs
 // This is useful for generating links to uploaded files or viewer pages
@@ -90,5 +92,83 @@ export function isUrl(input: string): boolean {
     return url.protocol === 'http:' || url.protocol === 'https:';
   } catch {
     return false;
+  }
+}
+
+// Creates a simple logger that writes messages to a file and console
+// This is useful for debugging and tracking the execution of the application
+// The logger writes messages to a specified log file and also outputs them to the console
+// Example usage:
+// const logger = createLogger('app.log');
+// logger.log('This is a log message');
+// logger.close(); // Call this when done to close the file stream
+export function createLogger(logFile = 'default-log.txt') {
+  const logsDir = 'logs'; // Directory where log files will be stored, <project root>/logs
+  fs.mkdirSync(logsDir, { recursive: true });
+
+  const resolvedPath = path.isAbsolute(logFile)
+    ? logFile
+    : path.join(logsDir, logFile);
+
+  const stream = createWriteStream(resolvedPath, { flags: 'a' });
+
+  const log = (message: string) => {
+    const timestamp = new Date().toISOString();
+    const entry = `[${timestamp}] ${message}\n`;
+    stream.write(entry);
+    console.log(message);
+  };
+
+  const originalConsoleError = console.error;
+
+  const error = (...args: any[]) => {
+    const timestamp = new Date().toISOString();
+    const message = args.map(arg =>
+      typeof arg === 'string' ? arg : JSON.stringify(arg, null, 2)
+    ).join(' ');
+    const entry = `[${timestamp}] ❌ ${message}\n`;
+    stream.write(entry);
+    originalConsoleError(...args);
+  };
+
+  const close = () => stream.end();
+
+  console.error = error;
+
+  return { log, error, close };
+}
+
+// Fetches from (or POSTs to) a URL with retry logic
+// This function attempts to fetches a URL up to maxRetries times with exponential backoff
+export async function fetchWithRetry(
+  url: string,
+  options: any = {},
+  maxRetries = 3,
+  initialDelay = 1000
+): Promise<any> {
+  let attempt = 0;
+  let delay = initialDelay;
+
+  while (attempt < maxRetries) {
+    try {
+      const response = await axios(url, options);
+      return response;
+    } catch (err: any) {
+      attempt++;
+
+      const status = err?.response?.status;
+      const statusText = err?.response?.statusText;
+
+      if (status) {
+        console.error(`❌ Received ${status} ${statusText || ''} from ${url} on attempt ${attempt}`);
+      } else {
+        console.error(`❌ Exception on attempt ${attempt} fetching ${url}:`, err.message || err);
+      }
+
+      if (attempt >= maxRetries) throw err;
+
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay *= 2;
+    }
   }
 }
