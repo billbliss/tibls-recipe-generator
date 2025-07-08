@@ -55,7 +55,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import fetch from 'node-fetch';
 import { diff } from 'json-diff'; // user-friendly output; could also use 'fast-json-patch' or 'deep-diff'
-import { createLogger, fetchWithRetry } from '../utils/utility-functions';
+import { createLogger, fetchWithRetry, sleep } from '../utils/utility-functions';
+import { ResponseMode } from '../types/types';
 const { log, error, close } = createLogger('compare-log.txt');
 
 const REQUEST_DELAY_MS = 20000; // Delay between requests (in milliseconds) to avoid rate limiting issues
@@ -75,13 +76,6 @@ const ONLY_FILES: string[] = [
   "Bang Bang Chicken Salad.json",
   "Baked French Fries (So Crispy!).json"
 ];
-
-// Utility function to pause execution for a given number of milliseconds
-// This is useful for rate limiting or waiting for server responses
-// Example: await sleep(1000); // pauses for 1 second
-function sleep(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 // Normalizes a recipe object by removing metadata and sorting ingredients and steps
 // This is useful for comparing recipes without worrying about volatile metadata differences
@@ -111,7 +105,11 @@ async function fetchServerJson(url: string): Promise<TiblsResponse> {
   const response = await fetchWithRetry(SERVER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    data: JSON.stringify({ input: url, testMode: true })
+    data: JSON.stringify(
+      { input: url, 
+        responseMode: ResponseMode.JSON 
+      }
+    )
   });
   return await response.data as TiblsResponse;
 }

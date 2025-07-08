@@ -16,6 +16,7 @@ import { createLogger } from './utils/utility-functions';
 const { log, error, close } = createLogger('server-log.txt');
 
 import { generateRecipeFilename, getBaseUrl, loadGoogleCredentialsFromBase64, resolveFromRoot, isUrl, fetchWithRetry } from './utils/utility-functions';
+import { ResponseMode } from './types/types';
 
 dotenv.config();
 
@@ -32,13 +33,15 @@ app.use(express.static(resolveFromRoot('public')));
 
 // This route handles the webhook POST requests
 // It expects a JSON body with an `input` field for a URL; the filename and filetype are used for images/PDFs
-// It uses OpenAI's API to process the input and generate a Tibls JSON object
-// The generated JSON is then saved to a GitHub Gist and a viewer URL is returned
+// It uses OpenAI's API to process the input and generate a Tibls JSON object.
+// responseMode controls the response behavior:
+// - VIEWER: returns a URL to the viewer page for the generated recipe
+// - JSON: returns the raw Tibls JSON object
 app.post('/webhook', upload.single('filename'), async (req: Request, res: Response) => {
   let input = req.body.input;
   const file = req.file;
   const filetype = req.body.filetype;
-  const testMode = (req.body.testMode === true);
+  const responseMode: ResponseMode = req.body.responseMode as ResponseMode || ResponseMode.VIEWER;
 
   if (!input && file && file.mimetype === 'application/pdf') {
     const tempPdfPath = path.join('/tmp', `upload-${Date.now()}.pdf`);
@@ -209,9 +212,9 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       return;
     }
 
-    if (!process.env.GITHUB_TOKEN || !process.env.GIST_ID) {
-      error('Missing GitHub credentials');
-      res.status(500).json({ error: 'Missing GitHub token or Gist ID' });
+    if (responseMode === ResponseMode.VIEWER && (!process.env.GITHUB_TOKEN || !process.env.GIST_ID)) {
+      error('Missing GitHub credentials for viewer mode');
+      res.status(500).json({ error: 'Missing GitHub token or Gist ID for viewer mode' });
       return;
     }
 
@@ -259,32 +262,42 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       }
     }
 
-    if (!testMode) {
-      // Generate a user-friendly filename for the file to be saved in the Gist
-      const filename = `${generateRecipeFilename(tiblsJson)}.json`;
-      const gistId = process.env.GIST_ID;
-      const gistPayload = {
-        files: {
-          [filename]: {
-            content: JSON.stringify(tiblsJson, null, 2)
+    switch (responseMode) {
+      case ResponseMode.JSON:
+        // Return the Tibls JSON object directly
+        res.json(tiblsJson);
+        break;
+
+      case ResponseMode.VIEWER: {
+        // Generate a filename for the Tibls JSON object
+        // and create a Gist with the content
+        // Return the URL to the Gist viewer page
+        const filename = `${generateRecipeFilename(tiblsJson)}.json`;
+        const gistId = process.env.GIST_ID;
+        const gistPayload = {
+          files: {
+            [filename]: {
+              content: JSON.stringify(tiblsJson, null, 2)
+            }
           }
-        }
-      };
+        };
 
-      // Patch the Gist with the new recipe JSON
-      await axios.patch(`https://api.github.com/gists/${gistId}`, gistPayload, {
-        headers: {
-          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-          Accept: 'application/vnd.github+json',
-          'User-Agent': 'Tibls-Webhook-Handler'
-        }
-      });
+        await axios.patch(`https://api.github.com/gists/${gistId}`, gistPayload, {
+          headers: {
+            Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'Tibls-Webhook-Handler'
+          }
+        });
 
-      const viewerUrl = `${getBaseUrl(req)}/gist/${gistId}`;
-      res.json({ status: 'queued', viewer: viewerUrl });
-    } else {
-      // In test mode, return the Tibls JSON directly without saving to Gist
-      res.json(tiblsJson);
+        const viewerUrl = `${getBaseUrl(req)}/gist/${gistId}`;
+        res.json({ status: 'queued', viewer: viewerUrl });
+        break;
+      }
+
+      default:
+        res.status(400).json({ error: `Unsupported responseMode: ${responseMode}` });
+        break;
     }
   } catch (err: any) {
     error('Error:', err);

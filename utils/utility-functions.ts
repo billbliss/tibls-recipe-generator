@@ -14,6 +14,13 @@ export function getBaseUrl(req: Request): string {
   return `${req.protocol}://${req.get("host")}`;
 }
 
+// Utility function to pause execution for a given number of milliseconds
+// This is useful for rate limiting or waiting for server responses
+// Example: await sleep(1000); // pauses for 1 second
+export function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // Generates a filename for a recipe based on its name and the current date
 export function generateRecipeFilename(tiblsJson: any, appendTimestamp: boolean = true): string {
   const fallbackName = "Untitled-Recipe";
