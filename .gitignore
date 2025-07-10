@@ -36,6 +36,10 @@ ngrok.yml
 tmp/
 *.tmp
 
+# Do not track uploaded recipe images
+/public/img/recipe-images/*
+!/public/img/recipe-images/.gitkeep
+
 # Test data and artifacts
 # test-data/
 

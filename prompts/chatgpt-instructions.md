@@ -56,12 +56,29 @@ This step ensures the image metadata is reliable and prevents hallucinated value
 
 Always include a top-level `calories` field.
 
-- If the recipe includes a stated calorie count, use it.
+- If the recipe includes a stated calorie count (in structured data like JSON-LD), use that value as-is. Do not override it with a new estimate.
+- Only perform calorie estimation if no calorie value is present in structured data.
+- If a calorie estimate is generated, always explain this in `notes[]`.
+
+- If the visible recipe states a per-serving calorie value (e.g., “509 calories per serving”) and the number of servings is known, prefer this over estimating from raw ingredients. Multiply the per-serving value by the number of servings to get the total `calories` value, and explain in `notes[]`.
+
+Example:
+```json
+{ "text": "Calories per serving stated as 509; multiplied by 8 servings = 4,072 total kcal. Used stated value rather than estimating from raw ingredients." }
+```
+
 - If not, estimate total calories using typical values for raw ingredients:
   1. Group by ingredient type (e.g., flour, butter, sugar, eggs).
   2. Estimate based on standard raw ingredient values.
   3. Round to the nearest 100 kcal.
   4. Add a `notes[]` entry summarizing the estimate.
+
+- If an estimate is generated and a valid `servings` value is present, add the per-serving calorie value to `notes[]` for context. Do not divide or override the `calories` field, which should always reflect the total for the full recipe.
+
+Example note:
+```json
+{ "text": "Estimated total calories ~1,200 kcal; divided by 4 servings = ~300 kcal per serving. Based on typical raw ingredient values; actual values may vary." }
+```
 
 - If calorie estimation is not feasible (e.g., fewer than 3 ingredients with measurable quantities or ambiguous unit types):
   - Set `calories: 0` (never use `null`)

@@ -15,7 +15,20 @@ const execFileAsync = promisify(execFile);
 import { createLogger } from './utils/utility-functions';
 const { log, error, close } = createLogger('server-log.txt');
 
-import { generateRecipeFilename, getBaseUrl, loadGoogleCredentialsFromBase64, resolveFromRoot, isUrl, fetchWithRetry } from './utils/utility-functions';
+import {
+  generateRecipeFilename, 
+  getBaseUrl, 
+  loadGoogleCredentialsFromBase64, 
+  resolveFromRoot, 
+  isUrl, 
+  fetchWithRetry,
+  extractTextFromPdf,
+  extractEmbeddedImageFromPdf,
+  applyPerServingCaloriesOverride,
+  enforcePerServingCalories
+} from './utils/utility-functions';
+
+const signficantPdfTextLength = 50; // Minimum length of meaningful text to consider the PDF valid
 import { ResponseMode } from './types/types';
 
 dotenv.config();
@@ -29,7 +42,20 @@ const tiblsSchema = JSON.parse(fs.readFileSync(resolveFromRoot('prompts', 'tibls
 
 app.use(bodyParser.json({ limit: '10mb' }));
 const upload = multer();
-app.use(express.static(resolveFromRoot('public')));
+
+// Serve static files from the public directory
+// This includes the viewer HTML, CSS, and JavaScript files
+// The static files are served from the public directory at the root URL
+// The public directory contains the viewer UI and other static assets
+// The static files are served with a cache control header for images to improve performance
+// Images in the img/recipe/images directory are cached for 1 year
+app.use(express.static(resolveFromRoot('public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.includes('/img/recipe/images/')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+    }
+  }
+}));
 
 // This route handles the webhook POST requests
 // It expects a JSON body with an `input` field for a URL; the filename and filetype are used for images/PDFs
@@ -43,46 +69,62 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
   const filetype = req.body.filetype;
   const responseMode: ResponseMode = req.body.responseMode as ResponseMode || ResponseMode.VIEWER;
 
+  // If there's no value in the `input` field, check if a PDF file was uploaded
+  // If the file is a PDF, extract text from it using pdf-parse
+  // If the PDF contains significant text, use that as input, and look for an embedded image - save it as ogImageUrl
+  // If the PDF does not contain significant text, rasterize the first page to an image
+  // and use Google Vision API to perform OCR on the image to extract text
   if (!input && file && file.mimetype === 'application/pdf') {
     const tempPdfPath = path.join('/tmp', `upload-${Date.now()}.pdf`);
     fs.mkdirSync(path.dirname(tempPdfPath), { recursive: true });
     fs.writeFileSync(tempPdfPath, file.buffer);
 
-    const pngPath = path.join('/tmp', `page1-${Date.now()}.png`);
-    try {
-      await execFileAsync('convert', [`${tempPdfPath}[0]`, pngPath]);
-    } catch (err) {
-      throw new Error(`ImageMagick failed: ${err}`);
-    }
+    const pdfText = await extractTextFromPdf(file.buffer);
+    if (pdfText.length > signficantPdfTextLength) {
+      input = pdfText;
+      // Extract ogImageUrl from PDF if available
+      const ogImageUrl = await extractEmbeddedImageFromPdf(tempPdfPath, req);
+      if (ogImageUrl) {
+        req.body.ogImageUrl = ogImageUrl;
+      }
+    } else {
+      // If the PDF does not contain significant text, rasterize the first page to an image
+      const pngPath = path.join('/tmp', `page1-${Date.now()}.png`);
+      try {
+        await execFileAsync('convert', [`${tempPdfPath}[0]`, pngPath]);
+      } catch (err) {
+        throw new Error(`ImageMagick failed: ${err}`);
+      }
 
-    const imageBuffer = fs.readFileSync(pngPath);
+      const imageBuffer = fs.readFileSync(pngPath);
 
-    // Initialize Vision client
-    loadGoogleCredentialsFromBase64();
-    const visionClient = new vision.ImageAnnotatorClient({
-      keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS
-    });
-
-    try {
-      const [result] = await visionClient.textDetection({
-        image: { content: imageBuffer }
+      // Initialize Vision client
+      loadGoogleCredentialsFromBase64();
+      const visionClient = new vision.ImageAnnotatorClient({
+        keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS
       });
 
-      const detections = result.textAnnotations;
-      if (!detections || detections.length === 0) {
-        throw new Error('No text detected in image');
-      }
+      try {
+        const [result] = await visionClient.textDetection({
+          image: { content: imageBuffer }
+        });
 
-      input = detections[0]?.description?.trim() || '';
-      if (!input) {
-        throw new Error('Extracted text was empty');
+        const detections = result.textAnnotations;
+        if (!detections || detections.length === 0) {
+          throw new Error('No text detected in image');
+        }
+
+        input = detections[0]?.description?.trim() || '';
+        if (!input) {
+          throw new Error('Extracted text was empty');
+        }
+      } catch (err) {
+        console.error('Vision OCR failed:', err);
+        res.status(500).json({ error: 'Failed to extract text using OCR' });
+        return;
       }
-    } catch (err) {
-      console.error('Vision OCR failed:', err);
-      res.status(500).json({ error: 'Failed to extract text using OCR' });
-      return;
     }
-  }
+  } 
 
   if (!input || typeof input !== 'string') {
     res.status(400).json({ error: 'Missing or invalid `input` field' });
@@ -248,6 +290,32 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
 
     const tiblsJson = JSON.parse(argsString);
 
+    // Inject ogImageUrl if provided and not already present
+    const ogImageUrl = req.body.ogImageUrl;
+    if (
+      ogImageUrl &&
+      tiblsJson?.itemListElement?.[0] &&
+      !tiblsJson.itemListElement[0].ogImageUrl
+    ) {
+      tiblsJson.itemListElement[0].ogImageUrl = ogImageUrl;
+    }
+
+    // Optionally override estimated calories based on a visible per-serving value
+    // Improved: Filter out ambiguous calorie phrases and use a better regex.
+    const recipe = tiblsJson?.itemListElement?.[0];
+    if (recipe?.servings && typeof recipe.servings === 'number') {
+      const ambiguous = /less\s+than|approximately|about|~|under/i.test(input);
+      const match = input.match(/\b(\d{2,4})\s*(?:kcal|calories?)\s*(?:per\s+serving|each)\b/i);
+      if (!ambiguous && match) {
+        const perServingCalories = parseInt(match[1], 10);
+        if (!isNaN(perServingCalories)) {
+          applyPerServingCaloriesOverride(tiblsJson, perServingCalories, recipe.servings);
+        }
+      }
+    }
+    // Enforce per-serving calories conversion if servings is available
+    enforcePerServingCalories(tiblsJson);
+
     // An easy way to generate test data for debugging
     if (process.env.GENERATE_TEST_DATA === 'true') {
       try {
@@ -381,8 +449,9 @@ app.get(["/", "/gist/:gistId"], async (req: Request, res: Response) => {
             date = new Date(timestamp * 1000).toLocaleDateString("en-US", { dateStyle: "medium" });
           }
         }
+        const ogImageUrl = recipe.ogImageUrl || "";
 
-        return { name, description, date, rawJsonUrl, tiblsUrl };
+        return { name, description, date, rawJsonUrl, tiblsUrl, ogImageUrl };
       });
 
     // Generate the {{TABLE_ROWS}} HTML content dynamically
@@ -396,9 +465,10 @@ app.get(["/", "/gist/:gistId"], async (req: Request, res: Response) => {
     const html = template.replace("{{TABLE_ROWS}}", `
       <div class="recipe-list">
         ${recipes
-          .filter(r => r.name || r.description || r.tiblsUrl || r.rawJsonUrl)
+          .filter(r => r.name || r.description || r.tiblsUrl || r.rawJsonUrl || r.ogImageUrl)
           .map(r => `
             <div class="recipe-card">
+              <div class="recipe-field">${r.ogImageUrl ? `<img class="thumbnail" src="${r.ogImageUrl}" alt="${r.name} image" />` : ''}</div>
               <div class="recipe-field"><span class="label">Recipe Name</span>${r.name}</div>
               ${r.description ? `<div class="recipe-field"><span class="label">Summary</span>${r.description}</div>` : ""}
               <div class="recipe-field"><span class="label">Date</span>${r.date || "Unknown"}</div>

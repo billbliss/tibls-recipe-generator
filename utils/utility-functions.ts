@@ -5,6 +5,11 @@ import { createWriteStream } from 'fs';
 import path from 'path';
 import { Request } from 'express';
 import axios from 'axios';
+import pdfParse from 'pdf-parse';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 // Returns the base URL of the request, used for generating absolute URLs
 // This is useful for generating links to uploaded files or viewer pages
@@ -177,5 +182,79 @@ export async function fetchWithRetry(
       await new Promise((resolve) => setTimeout(resolve, delay));
       delay *= 2;
     }
+  }
+}
+
+// Extracts text from a PDF buffer using pdf-parse
+// This function returns the extracted text so the caller can decide what to do with it
+export async function extractTextFromPdf(buffer: Buffer): Promise<string> {
+  const data = await pdfParse(buffer);
+  return data.text.replace(/\s+/g, ' ').trim();
+}
+
+// Extracts an embedded image from a PDF file using pdfimages
+// This function uses the pdfimages command-line tool to extract images from the PDF
+// It saves the image to a temporary file and returns the URL to access it
+// The image is saved in the public/img/recipe/images directory with a unique name based on the current timestamp
+// If no images are found, it returns null
+export async function extractEmbeddedImageFromPdf(tempPdfPath: string, req: Request): Promise<string | null> {
+  const baseName = `img-${Date.now()}`;
+  const outputDir = resolveFromRoot('public', 'img', 'recipe-images');
+  const outputBasePath = path.join(outputDir, baseName);
+
+  try {
+    await execFileAsync('pdfimages', ['-png', tempPdfPath, outputBasePath]);
+
+    const imageFiles = fs.readdirSync(outputDir)
+      .filter(f => f.startsWith(baseName) && f.endsWith('.png'));
+
+    if (imageFiles.length > 0) {
+      const imageFileName = imageFiles[0];
+      return `${getBaseUrl(req)}/img/recipe-images/${imageFileName}`;
+    }
+  } catch (err) {
+    console.warn('⚠️ Failed to extract image from PDF:', err);
+  }
+
+  return null;
+}
+
+// Optionally override estimated calories with per-serving × servings total
+// Only applies if the original estimate exists and differs meaningfully
+export function applyPerServingCaloriesOverride(
+  tiblsJson: any,
+  perServingCalories: number,
+  servings: number
+): void {
+  const recipe = tiblsJson?.itemListElement?.[0];
+  if (!recipe || typeof perServingCalories !== 'number' || typeof servings !== 'number') return;
+
+  const estimatedNote = recipe.notes?.find((n: any) =>
+    typeof n.text === 'string' && n.text.includes('Estimated total calories')
+  );
+
+  const perServingTotal = Math.round(perServingCalories * servings);
+  const isCloseEnough = Math.abs(perServingTotal - recipe.calories) < 50;
+
+  if (estimatedNote && !isCloseEnough) {
+    recipe.calories = perServingTotal;
+    recipe.notes.push({
+      text: `Calories per serving stated as ${perServingCalories}; multiplied by ${servings} servings = ${perServingTotal} total kcal. Overrode model-estimated value.`
+    });
+  }
+}
+
+// Converts total calories to per-serving if servings is defined and calories is numeric
+export function enforcePerServingCalories(tiblsJson: any): void {
+  const recipe = tiblsJson?.itemListElement?.[0];
+  if (!recipe || typeof recipe.calories !== 'number' || typeof recipe.servings !== 'number') return;
+
+  const perServing = Math.round(recipe.calories / recipe.servings);
+  if (perServing !== recipe.calories) {
+    recipe.notes = recipe.notes || [];
+    recipe.notes.push({
+      text: `Converted total calories (${recipe.calories}) to per-serving (${perServing}) based on ${recipe.servings} servings.`
+    });
+    recipe.calories = perServing;
   }
 }

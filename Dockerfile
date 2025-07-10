@@ -4,9 +4,9 @@ FROM node:22
 # Create app directory inside the container
 WORKDIR /app
 
-# Install Ghostscript, ImageMagick, and required PDF policy settings
-RUN apt-get update && apt-get install -y ghostscript
-RUN apt-get update && apt-get install -y imagemagick && \
+# Install Ghostscript, ImageMagick, poppler-utils and required PDF policy settings
+RUN apt-get update && \
+    apt-get install -y ghostscript imagemagick poppler-utils && \
     sed -i 's/<policy domain="coder" rights="none" pattern="PDF" \/>/<policy domain="coder" rights="read|write" pattern="PDF" \/>/' /etc/ImageMagick-6/policy.xml
 
     # Debug: verify ImageMagick executable path
