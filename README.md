@@ -54,6 +54,21 @@ npm run build
 npm start
 ```
 
+### Linting
+
+To check code style and catch potential issues:
+
+```bash
+npm run lint
+```
+
+You can also add:
+
+```bash
+npm run lint -- --fix
+```
+To autocorrect common issues like spacing or missing semicolons.
+
 ## 🔧 Environment Variables
 
 Set runtime behavior and external integrations using these variables. Some are required for OCR or API access.

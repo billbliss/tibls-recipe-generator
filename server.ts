@@ -12,21 +12,24 @@ import { promisify } from 'util';
 import * as cheerio from 'cheerio';
 const execFileAsync = promisify(execFile);
 
-import { createLogger } from './utils/utility-functions';
+import { createLogger } from './utils/core-utils';
 const { log, error, close } = createLogger('server-log.txt');
 
 import {
-  generateRecipeFilename, 
-  getBaseUrl, 
-  loadGoogleCredentialsFromBase64, 
-  resolveFromRoot, 
-  isUrl, 
-  fetchWithRetry,
+  getBaseUrl,
+  loadGoogleCredentialsFromBase64,
+  isUrl,
+  fetchWithRetry
+} from './utils/core-utils';
+
+import {
+  resolveFromRoot,
+  generateRecipeFilename,
   extractTextFromPdf,
-  extractEmbeddedImageFromPdf,
-  applyPerServingCaloriesOverride,
-  enforcePerServingCalories
-} from './utils/utility-functions';
+  extractEmbeddedImageFromPdf
+} from './utils/file-utils';
+
+import { applyPerServingCaloriesOverride, enforcePerServingCalories } from './utils/recipe-utils';
 
 const signficantPdfTextLength = 50; // Minimum length of meaningful text to consider the PDF valid
 import { ResponseMode } from './types/types';
@@ -38,7 +41,9 @@ const port = process.env.PORT || 3000;
 
 // Load system prompt and schema from source files
 const tiblsPrompt = fs.readFileSync(resolveFromRoot('prompts', 'chatgpt-instructions.md'), 'utf8');
-const tiblsSchema = JSON.parse(fs.readFileSync(resolveFromRoot('prompts', 'tibls-schema.json'), 'utf8'));
+const tiblsSchema = JSON.parse(
+  fs.readFileSync(resolveFromRoot('prompts', 'tibls-schema.json'), 'utf8')
+);
 
 app.use(bodyParser.json({ limit: '10mb' }));
 const upload = multer();
@@ -49,13 +54,15 @@ const upload = multer();
 // The public directory contains the viewer UI and other static assets
 // The static files are served with a cache control header for images to improve performance
 // Images in the img/recipe/images directory are cached for 1 year
-app.use(express.static(resolveFromRoot('public'), {
-  setHeaders: (res, filePath) => {
-    if (filePath.includes('/img/recipe/images/')) {
-      res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+app.use(
+  express.static(resolveFromRoot('public'), {
+    setHeaders: (res, filePath) => {
+      if (filePath.includes('/img/recipe/images/')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year
+      }
     }
-  }
-}));
+  })
+);
 
 // This route handles the webhook POST requests
 // It expects a JSON body with an `input` field for a URL; the filename and filetype are used for images/PDFs
@@ -66,8 +73,7 @@ app.use(express.static(resolveFromRoot('public'), {
 app.post('/webhook', upload.single('filename'), async (req: Request, res: Response) => {
   let input = req.body.input;
   const file = req.file;
-  const filetype = req.body.filetype;
-  const responseMode: ResponseMode = req.body.responseMode as ResponseMode || ResponseMode.VIEWER;
+  const responseMode: ResponseMode = (req.body.responseMode as ResponseMode) || ResponseMode.VIEWER;
 
   // If there's no value in the `input` field, check if a PDF file was uploaded
   // If the file is a PDF, extract text from it using pdf-parse
@@ -124,7 +130,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
         return;
       }
     }
-  } 
+  }
 
   if (!input || typeof input !== 'string') {
     res.status(400).json({ error: 'Missing or invalid `input` field' });
@@ -134,12 +140,14 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
   if (isUrl(input)) {
     const recipeUrl = input.trim();
     try {
-      const rawHtml = (await fetchWithRetry(recipeUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (TiblsRecipeLoaderBot; +https://tibls.app)',
-          'Accept-Language': 'en-US,en;q=0.9'
-        }
-      })).data;
+      const rawHtml = (
+        await fetchWithRetry(recipeUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (TiblsRecipeLoaderBot; +https://tibls.app)',
+            'Accept-Language': 'en-US,en;q=0.9'
+          }
+        })
+      ).data;
       const $ = cheerio.load(rawHtml);
 
       // Extract and filter <head> HTML for minimal relevant content
@@ -148,24 +156,19 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       let head = $('head').clone();
       let extractedJsonLd: any = null;
 
-      const ldScripts = head.find('script[type="application/ld+json"]');
-
       head.find('script[type="application/ld+json"]').each((_, el) => {
         const scriptContent = $(el).text().trim();
         try {
           const json = JSON.parse(scriptContent);
-          const items = Array.isArray(json)
-            ? json
-            : json['@graph']
-              ? json['@graph']
-              : [json];
+          const items = Array.isArray(json) ? json : json['@graph'] ? json['@graph'] : [json];
 
-          const recipeItem = items.find((item: Record<string, any>, index: number) => {
+          const recipeItem = items.find((item: Record<string, any>) => {
             const type = item['@type'];
             const isRecipe =
               type === 'Recipe' ||
               (Array.isArray(type) && type.includes('Recipe')) ||
-              item.recipeIngredient || item.recipeInstructions;
+              item.recipeIngredient ||
+              item.recipeInstructions;
             return isRecipe;
           });
 
@@ -176,17 +179,17 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
           if (!recipeItem) {
             $(el).remove();
           }
-        } catch (err) {
+        } catch {
+          // Not worth logging every invalid JSON-LD with catch(err) here
           $(el).remove(); // Remove if not valid JSON
         }
       });
 
-      head.find([
-        'style',
-        'link[rel="stylesheet"]',
-        'link[rel*="icon"]',
-        'link[rel*="pre"]'
-      ].join(',')).remove();
+      head
+        .find(
+          ['style', 'link[rel="stylesheet"]', 'link[rel*="icon"]', 'link[rel*="pre"]'].join(',')
+        )
+        .remove();
 
       const headHtml = head.html() || '';
 
@@ -210,7 +213,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
         ---
 
         Please fetch and parse the full recipe from the above URL.`;
-      } 
+      }
     } catch (err) {
       error('Failed to fetch HTML for URL:', err);
       res.status(500).json({ error: 'Failed to fetch page HTML from URL' });
@@ -228,7 +231,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
           function: {
             name: 'tiblsRecipe',
             description: 'Return a Tibls JSON object parsed from the input',
-            parameters: tiblsSchema  // injected from prompts/tibls-schema.json
+            parameters: tiblsSchema // injected from prompts/tibls-schema.json
           }
         }
       ],
@@ -236,7 +239,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       messages: [
         {
           role: 'system',
-          content: tiblsPrompt  // injected from prompts/chatgpt-instructions.md
+          content: tiblsPrompt // injected from prompts/chatgpt-instructions.md
         },
         {
           role: 'user',
@@ -254,7 +257,10 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       return;
     }
 
-    if (responseMode === ResponseMode.VIEWER && (!process.env.GITHUB_TOKEN || !process.env.GIST_ID)) {
+    if (
+      responseMode === ResponseMode.VIEWER &&
+      (!process.env.GITHUB_TOKEN || !process.env.GIST_ID)
+    ) {
       error('Missing GitHub credentials for viewer mode');
       res.status(500).json({ error: 'Missing GitHub token or Gist ID for viewer mode' });
       return;
@@ -266,10 +272,10 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
         fs.mkdirSync(debugDir, { recursive: true });
 
         const payloadPath = path.join(debugDir, `chatPayload-${Date.now()}.json`);
-        fs.writeFileSync(payloadPath, JSON.stringify(chatPayload, null, 2), "utf8");
+        fs.writeFileSync(payloadPath, JSON.stringify(chatPayload, null, 2), 'utf8');
         log(`Chat payload written to ${payloadPath}`);
       } catch (err) {
-        error("Failed to write chatPayload:", err);
+        error('Failed to write chatPayload:', err);
       }
     }
 
@@ -292,11 +298,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
 
     // Inject ogImageUrl if provided and not already present
     const ogImageUrl = req.body.ogImageUrl;
-    if (
-      ogImageUrl &&
-      tiblsJson?.itemListElement?.[0] &&
-      !tiblsJson.itemListElement[0].ogImageUrl
-    ) {
+    if (ogImageUrl && tiblsJson?.itemListElement?.[0] && !tiblsJson.itemListElement[0].ogImageUrl) {
       tiblsJson.itemListElement[0].ogImageUrl = ogImageUrl;
     }
 
@@ -322,11 +324,14 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
         const outputDir = resolveFromRoot('test-data');
         fs.mkdirSync(outputDir, { recursive: true }); // ensure directory exists
 
-        const outPath = path.join(outputDir, `${generateRecipeFilename(tiblsJson, false)}-chatGPT-response.json`);
-        fs.writeFileSync(outPath, JSON.stringify(openaiRes.data, null, 2), "utf8");
+        const outPath = path.join(
+          outputDir,
+          `${generateRecipeFilename(tiblsJson, false)}-chatGPT-response.json`
+        );
+        fs.writeFileSync(outPath, JSON.stringify(openaiRes.data, null, 2), 'utf8');
         log(`Test data written to ${outPath}`);
       } catch (err) {
-        error("Failed to write test data:", err);
+        error('Failed to write test data:', err);
       }
     }
 
@@ -375,7 +380,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
 
 // This route serves a specific file from the Gist by filename
 // It fetches the Gist content and returns the requested file's content
-app.get("/gist-file/:filename", async (req: Request, res: Response) => {
+app.get('/gist-file/:filename', async (req: Request, res: Response) => {
   const filename = req.params.filename;
   const gistId = process.env.GIST_ID;
 
@@ -383,7 +388,7 @@ app.get("/gist-file/:filename", async (req: Request, res: Response) => {
     const response = await axios.get(`https://api.github.com/gists/${gistId}`, {
       headers: {
         Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-        Accept: "application/vnd.github+json"
+        Accept: 'application/vnd.github+json'
       }
     });
 
@@ -393,39 +398,38 @@ app.get("/gist-file/:filename", async (req: Request, res: Response) => {
       //   return res.status(404).send("File not found");
       // causes a Typescrpt error in the app.get( line above
       // because it thinks it's returning a Response object, not a Promise object.
-      res.status(404).send("File not found");
+      res.status(404).send('File not found');
       return;
     }
 
-    res.setHeader("Content-Type", "application/json");
+    res.setHeader('Content-Type', 'application/json');
     res.send(file.content);
   } catch (err) {
-    error("Error fetching Gist file:", err);
-    res.status(500).send("Failed to retrieve file");
+    error('Error fetching Gist file:', err);
+    res.status(500).send('Failed to retrieve file');
   }
 });
 
 // This route serves the viewer UI for a specific Gist
 // It fetches the Gist content, extracts recipe files, and generates an HTML page to display them
 // The viewer allows users to import recipes directly into the Tibls app or display the raw JSON
-app.get(["/", "/gist/:gistId"], async (req: Request, res: Response) => {
+app.get(['/', '/gist/:gistId'], async (req: Request, res: Response) => {
   const gistId = req.params.gistId || process.env.GIST_ID;
 
   try {
     const response = await axios.get(`https://api.github.com/gists/${gistId}`, {
       headers: {
         Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-        Accept: "application/vnd.github+json",
-      },
+        Accept: 'application/vnd.github+json'
+      }
     });
 
     const files = response.data.files;
 
     const recipes = Object.keys(files)
-      .filter((filename) => filename.endsWith(".json"))
+      .filter((filename) => filename.endsWith('.json'))
       .map((filename) => {
         const file = files[filename];
-        const url = file.raw_url;
         const baseUrl = getBaseUrl(req);
         const rawJsonUrl = `${baseUrl}/gist-file/${filename}`;
         const tiblsUrl = `tibls://tibls.app/import?r=${rawJsonUrl}`;
@@ -437,19 +441,19 @@ app.get(["/", "/gist/:gistId"], async (req: Request, res: Response) => {
         }
 
         const recipe = parsed?.itemListElement?.[0] || {};
-        const name = recipe.name || filename.replace(/\.json$/, "");
-        const description = recipe.summary || "";
+        const name = recipe.name || filename.replace(/\.json$/, '');
+        const description = recipe.summary || '';
         const dateMatch = filename.match(/(\d{1,2}-[A-Za-z]+-\d{4})/);
-        let date = "Unknown";
+        let date = 'Unknown';
         if (dateMatch) {
           date = dateMatch[1];
         } else {
           const timestamp = parsed?.created || parsed?.updated;
           if (timestamp) {
-            date = new Date(timestamp * 1000).toLocaleDateString("en-US", { dateStyle: "medium" });
+            date = new Date(timestamp * 1000).toLocaleDateString('en-US', { dateStyle: 'medium' });
           }
         }
-        const ogImageUrl = recipe.ogImageUrl || "";
+        const ogImageUrl = recipe.ogImageUrl || '';
 
         return { name, description, date, rawJsonUrl, tiblsUrl, ogImageUrl };
       });
@@ -462,29 +466,35 @@ app.get(["/", "/gist/:gistId"], async (req: Request, res: Response) => {
     // This allows for easy customization of the viewer page without changing the server code
     // The viewer page is designed to be simple and responsive, displaying the recipes in a grid
     const template = fs.readFileSync(resolveFromRoot('public', 'viewer.html'), 'utf8');
-    const html = template.replace("{{TABLE_ROWS}}", `
+    const html = template.replace(
+      '{{TABLE_ROWS}}',
+      `
       <div class="recipe-list">
         ${recipes
-          .filter(r => r.name || r.description || r.tiblsUrl || r.rawJsonUrl || r.ogImageUrl)
-          .map(r => `
+          .filter((r) => r.name || r.description || r.tiblsUrl || r.rawJsonUrl || r.ogImageUrl)
+          .map(
+            (r) => `
             <div class="recipe-card">
               <div class="recipe-field">${r.ogImageUrl ? `<img class="thumbnail" src="${r.ogImageUrl}" alt="${r.name} image" />` : ''}</div>
               <div class="recipe-field"><span class="label">Recipe Name</span>${r.name}</div>
-              ${r.description ? `<div class="recipe-field"><span class="label">Summary</span>${r.description}</div>` : ""}
-              <div class="recipe-field"><span class="label">Date</span>${r.date || "Unknown"}</div>
+              ${r.description ? `<div class="recipe-field"><span class="label">Summary</span>${r.description}</div>` : ''}
+              <div class="recipe-field"><span class="label">Date</span>${r.date || 'Unknown'}</div>
               <div class="recipe-field"><span class="label">Import Link</span>
                 <a href="${r.tiblsUrl}">Import</a><br>
                 <a href="${r.rawJsonUrl}">Raw JSON</a>
               </div>
             </div>
-          `).join("")}
+          `
+          )
+          .join('')}
       </div>
-    `);
+    `
+    );
 
     res.send(html);
   } catch (err: any) {
-    error("Error fetching Gist:", err);
-    res.status(500).send("Error loading recipe viewer.");
+    error('Error fetching Gist:', err);
+    res.status(500).send('Error loading recipe viewer.');
   }
 });
 

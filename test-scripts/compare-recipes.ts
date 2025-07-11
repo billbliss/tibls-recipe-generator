@@ -1,63 +1,16 @@
 // This script compares local JSON files in the `tibls-starter-recipes` directory
 // with the live data fetched from a server.ts endpoint.
 
-// To run, type this command in terminal: 'npx ts-node test-scripts/compare-recipes.ts'
-
-// Debugging this script is tricky without some launch.json magic.
-// Here's the configs to add to launch.json that makes it easy:
-
-  //   {
-  //     "type": "node",
-  //     "request": "launch",
-  //     "name": "Debug compiled dist/server.js",
-  //     "program": "${workspaceFolder}/dist/server.js",
-  //     "preLaunchTask": "tsc: build - tsconfig.json",
-  //     "cwd": "${workspaceFolder}",
-  //     "envFile": "${workspaceFolder}/.env",
-  //     "outFiles": ["${workspaceFolder}/dist/**/*.js"],
-  //     "console": "integratedTerminal",
-  //     "skipFiles": ["<node_internals>/**"]
-  //   },
-  //   {
-  //     "type": "node",
-  //     "request": "launch",
-  //     "name": "Debug compare-recipes.ts",
-  //     "runtimeArgs": ["-r", "ts-node/register"],
-  //     "args": ["${workspaceFolder}/test-scripts/compare-recipes.ts"],
-  //     "cwd": "${workspaceFolder}",
-  //     "preLaunchTask": "wait-for-server",
-  //     "skipFiles": ["<node_internals>/**"],
-  //     "console": "integratedTerminal"
-  //   }
-  // ],
-  // "compounds": [
-  //   {
-  //     "name": "Debug Server + Compare Recipes",
-  //     "configurations": ["Debug with ts-node-dev", "Debug compare-recipes.ts"]
-  //   }
-
-  // You also need a .vscode/tasks.json file with the following content:
-
-  //   {
-  //   "version": "2.0.0",
-  //   "tasks": [
-  //     {
-  //       "label": "wait-for-server",
-  //       "type": "shell",
-  //       "command": "sleep",
-  //       "args": ["3"],
-  //       "problemMatcher": []
-  //     }
-  //   ]
-  // }
+// See README.md in the test-scripts directory for more details on how to run/debug this script.
 
 import fs from 'fs/promises';
 import path from 'path';
-import fetch from 'node-fetch';
-import { diff } from 'json-diff'; // user-friendly output; could also use 'fast-json-patch' or 'deep-diff'
-import { createLogger, fetchWithRetry, sleep } from '../utils/utility-functions';
+import { createLogger, fetchWithRetry, sleep } from '../utils/core-utils';
 import { ResponseMode } from '../types/types';
 const { log, error, close } = createLogger('compare-log.txt');
+
+import jsonDiff from 'json-diff';
+const { diff } = jsonDiff;
 
 const REQUEST_DELAY_MS = 20000; // Delay between requests (in milliseconds) to avoid rate limiting issues
 
@@ -73,23 +26,20 @@ const SERVER_URL = 'http://localhost:3000/webhook'; // only works in development
 
 // Optional list of filenames to process; if populated, only these will be compared
 const ONLY_FILES: string[] = [
-  "Bang Bang Chicken Salad.json",
-  "Baked French Fries (So Crispy!).json"
+  'Bang Bang Chicken Salad.json',
+  'Baked French Fries (So Crispy!).json'
 ];
 
 // Normalizes a recipe object by removing metadata and sorting ingredients and steps
 // This is useful for comparing recipes without worrying about volatile metadata differences
 function normalizeRecipe(recipe: any) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { id, created, updated, lastCooked, lastQueued, ...rest } = recipe;
 
   return {
     ...rest,
-    ingredients: [...(recipe.ingredients || [])].sort((a, b) =>
-      a.text.localeCompare(b.text)
-    ),
-    steps: [...(recipe.steps || [])].sort((a, b) =>
-      a.text.localeCompare(b.text)
-    ),
+    ingredients: [...(recipe.ingredients || [])].sort((a, b) => a.text.localeCompare(b.text)),
+    steps: [...(recipe.steps || [])].sort((a, b) => a.text.localeCompare(b.text))
   };
 }
 
@@ -105,18 +55,14 @@ async function fetchServerJson(url: string): Promise<TiblsResponse> {
   const response = await fetchWithRetry(SERVER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    data: JSON.stringify(
-      { input: url, 
-        responseMode: ResponseMode.JSON 
-      }
-    )
+    data: JSON.stringify({ input: url, responseMode: ResponseMode.JSON })
   });
-  return await response.data as TiblsResponse;
+  return (await response.data) as TiblsResponse;
 }
 
 async function compareJsonFiles() {
   const files = await fs.readdir(RECIPES_DIR);
-  const jsonFiles = files.filter(f => f.endsWith('.json'));
+  const jsonFiles = files.filter((f) => f.endsWith('.json'));
 
   for (const file of jsonFiles) {
     if (ONLY_FILES.length > 0 && !ONLY_FILES.includes(file)) {
@@ -142,10 +88,7 @@ async function compareJsonFiles() {
 
       log(`🔍 Comparing normalized recipes...`);
       // Normalize both recipes to remove metadata and sort ingredients/steps before comparison
-      const recipeDiff = diff(
-        normalizeRecipe(localRecipe),
-        normalizeRecipe(liveRecipe)
-      );
+      const recipeDiff = diff(normalizeRecipe(localRecipe), normalizeRecipe(liveRecipe));
 
       if (!recipeDiff) {
         log('✅ No differences found.');
@@ -153,7 +96,6 @@ async function compareJsonFiles() {
         log('❗ Differences:');
         log(typeof recipeDiff === 'string' ? recipeDiff : JSON.stringify(recipeDiff, null, 2));
       }
-
     } catch (err: unknown) {
       if (err instanceof Error) {
         log(`❌ Exception during comparison of ${file}: ${err.message}`);

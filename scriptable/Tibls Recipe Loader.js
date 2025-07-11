@@ -11,7 +11,6 @@ const webhookUrl = "https://tibls-recipe-generator-ptm9.onrender.com/webhook";
 // Default schema values
 let input = "";
 let filename = "";
-let filetype = "";
 let base64 = "";
 
 // Shared URL or text
@@ -33,7 +32,6 @@ else if (args.fileURLs.length > 0) {
   let data = fm.read(file);
   base64 = data.toBase64String();
   filename = file.name;
-  filetype = file.name.split(".").pop().toLowerCase();
 }
 
 // 3️⃣ Shared image (e.g. from Photos app)
@@ -41,14 +39,12 @@ else if (args.images.length > 0) {
   let img = args.images[0];
   base64 = Data.fromJPEG(img).toBase64String(); // Convert to JPEG
   filename = "image.jpg";
-  filetype = "jpg";
 }
 
 // Construct schema-consistent payload
 const payload = {
   input,
   filename,
-  filetype,
   base64
 };
 let req = new Request(webhookUrl);
