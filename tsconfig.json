@@ -9,8 +9,7 @@
     "strict": true,
     "outDir": "./dist",
     "sourceMap": true,
-    "resolveJsonModule": true,
-    "noEmit": true
+    "resolveJsonModule": true
   },
   "include": ["./**/*.ts"],
   "exclude": ["node_modules"]
