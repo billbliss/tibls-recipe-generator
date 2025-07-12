@@ -53,21 +53,33 @@ button:hover {
   background-color: #333;
 }
 
-#urlInput {
+#inputUrl {
   width: 90%;
   max-width: 600px;
   font-size: 1rem;
-  padding: 0.5rem;
+  padding: 0.25rem;
 }
 
 input[type="file"] {
   all: unset;
+  width: 90%;
+  max-width: 600px;
 }
 
 img {
   max-width: 100%;
   height: auto;
   display: block;
+}
+
+textarea {
+  width: 100%;
+  max-width: 600px;
+  height: 200px;
+  font-size: 1rem;
+  padding: 0.25rem;
+  border: 1px solid #555;
+  border-radius: 6px;
 }
 
 #spinner {
@@ -120,4 +132,34 @@ label {
   max-height: 180px;
   object-fit: cover;
   border-radius: 4px;
+}
+
+.tabs {
+  display: flex;
+  margin-bottom: 1rem;
+}
+
+.tab-button {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  color: #ccc;
+  border: 2px solid #333;
+  margin-right: 4px;
+  border-radius: 4px 4px 0 0;
+  background-color: #111;
+  cursor: pointer;
+}
+
+.tab-button.active {
+  background-color: #ccc; /* light background for active tab */
+  color: #000;
+  border-bottom: none; /* for seamless visual with the panel */
+  font-weight: bold;
+}
+
+.tab-content {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
 }
