@@ -50,6 +50,9 @@ This step ensures the image metadata is reliable and prevents hallucinated value
 - Always generate a `summary` (based on visible context or inferred tone) and include it.
 - Note any OCR ambiguity, handwritten notes, or extra metadata in `notes[]`.
 
+**If given text:**
+- If an image URL is included as "Use this value for ogImageUrl: ..." at the top of the input, include that in the output as the ogImageUrl field.
+
 ---
 
 ## 🧮 Step 2: Calorie Estimation (Always Include)

@@ -26,7 +26,8 @@ import {
   resolveFromRoot,
   generateRecipeFilename,
   extractTextFromPdf,
-  extractEmbeddedImageFromPdf
+  extractEmbeddedImageFromPdf,
+  saveImageToPublicDir
 } from './utils/file-utils';
 
 import { applyPerServingCaloriesOverride, enforcePerServingCalories } from './utils/recipe-utils';
@@ -62,6 +63,28 @@ app.use(
       }
     }
   })
+);
+
+// Image upload route for ogImageUpload
+app.post(
+  '/upload-image',
+  upload.single('ogImageUpload'),
+  async (req: Request, res: Response): Promise<void> => {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: 'No file uploaded' });
+      return;
+    }
+
+    try {
+      const relativePath = saveImageToPublicDir(file.buffer, file.originalname);
+      const publicUrl = `${getBaseUrl(req)}${relativePath}`;
+      res.json({ url: publicUrl });
+    } catch (err) {
+      console.error('Failed to save uploaded image:', err);
+      res.status(500).json({ error: 'Failed to save uploaded image' });
+    }
+  }
 );
 
 // This route handles the webhook POST requests

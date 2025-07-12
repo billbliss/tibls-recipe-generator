@@ -21,7 +21,7 @@
       <div class="tabs">
         <button type="button" class="tab-button active" data-tab="url">URL</button>
         <button type="button" class="tab-button" data-tab="file">File</button>
-        <button type="button" class="tab-button" data-tab="text">Paste Text</button>
+        <button type="button" class="tab-button" data-tab="text">Paste Recipe</button>
       </div>
       <div class="tab-content" id="tab-url">
         <input type="text" id="inputUrl" placeholder="https://example.com/recipe" />
@@ -32,128 +32,15 @@
       </div>
       <div class="tab-content" id="tab-text" style="display: none;">
         <textarea id="inputText" rows="10" placeholder="Paste full recipe text here..."></textarea>
+        <div id="imagePasteZone" class="paste-zone" tabindex="0">
+          Paste recipe image here (drag & drop not supported)
+        </div>
       </div>
       <button type="submit">Convert to Tibls format</button>
       <div id="spinner"></div>
     </form>
     <div id="uploadStatus" style="margin-top: 1em;"></div>
   </div>
-
-<!-- OLD VERSION
-    <div class="upload-form">
-    <h2>Upload a Recipe</h2>
-    <form id="uploadForm" enctype="multipart/form-data">
-      <div class="form-line">
-        <label>Recipe URL:</label>
-        <input type="text" name="input" placeholder="https://example.com/recipe">
-      </div>
-      <div class="form-line file-upload">
-        <label>Or upload an image/PDF:</label>
-        <input type="file" name="file" accept="image/*,.pdf" id="fileInput">
-      </div>
-      <div id="previewContainer"></div>
-      <button type="submit">Convert to Tibls format</button>
-      <div id="spinner"></div>
-    </form>
-    <div id="uploadStatus" style="margin-top: 1em;"></div>
-  </div> -->
-
-  <script>
-    const inputFile = document.getElementById("inputFile");
-    if (inputFile) {
-      inputFile.addEventListener("change", function () {
-        const file = this.files[0];
-        const preview = document.getElementById("previewContainer");
-        preview.innerHTML = "";
-
-        if (file) {
-          const reader = new FileReader();
-
-          if (file.type.startsWith("image/")) {
-            reader.onload = function (e) {
-              const img = document.createElement("img");
-              img.src = e.target.result;
-              preview.appendChild(img);
-            };
-            reader.readAsDataURL(file);
-          } else if (file.type === "application/pdf") {
-            const p = document.createElement("p");
-            p.textContent = `Selected PDF: ${file.name}`;
-            preview.appendChild(p);
-          } else {
-            preview.textContent = "Unsupported file type.";
-          }
-        }
-      });
-    }
-
-    document.getElementById("uploadForm").addEventListener("submit", async function (e) {
-      e.preventDefault();
-      const form = e.target;
-      const formData = new FormData();
-
-      const { type, value } = getActiveInput();
-
-      if (!value) {
-        alert("Please enter a URL, upload a file, or paste recipe text.");
-        return;
-      }
-
-      if (type === "url") formData.append("input", value);
-      if (type === "file") {
-        formData.append("filename", value);
-      }
-      if (type === "text") formData.append("input", value);
-
-      const status = document.getElementById("uploadStatus");
-      status.textContent = "Submitting...";
-      status.className = "";
-      document.getElementById("spinner").style.display = "inline-block";
-
-      try {
-        const result = await fetch("/webhook", {
-          method: "POST",
-          body: formData
-        });
-
-        const json = await result.json();
-        if (json.viewer) {
-          status.innerHTML = `✅ Recipe queued. Reloading...`; 
-          status.className = "success";
-          setTimeout(() => window.location.reload(), 1000); 
-        } else {
-          throw new Error(json.error || "Unknown error");
-        }
-      } catch (err) {
-        status.textContent = `❌ Error: ${err.message}`;
-        status.className = "error";
-      }
-      finally {
-        document.getElementById("spinner").style.display = "none";
-      }
-    });
-
-    document.querySelectorAll('.tab-button').forEach(button => {
-      button.addEventListener('click', () => {
-        // Remove active class from all tabs
-        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-
-        // Hide all tab content
-        document.querySelectorAll('.tab-content').forEach(tab => tab.style.display = 'none');
-
-        // Show selected tab
-        const selected = button.getAttribute('data-tab');
-        document.getElementById(`tab-${selected}`).style.display = 'block';
-      });
-    });
-
-    function getActiveInput() {
-      const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
-      if (activeTab === 'url') return { type: 'url', value: document.getElementById('inputUrl').value };
-      if (activeTab === 'file') return { type: 'file', value: document.getElementById('inputFile').files[0] };
-      if (activeTab === 'text') return { type: 'text', value: document.getElementById('inputText').value };
-    }
-  </script>
+  <script src="/viewer.js"></script>
 </body>
 </html>

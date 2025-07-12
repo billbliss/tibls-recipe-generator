@@ -72,3 +72,15 @@ export async function extractEmbeddedImageFromPdf(
 
   return null;
 }
+
+export function saveImageToPublicDir(buffer: Buffer, originalName: string): string {
+  const ext = path.extname(originalName || '.png');
+  const filename = `user-${Date.now()}${ext}`;
+  const outputDir = resolveFromRoot('public', 'img', 'recipe-images');
+  const fullPath = path.join(outputDir, filename);
+
+  fs.mkdirSync(outputDir, { recursive: true });
+  fs.writeFileSync(fullPath, buffer);
+
+  return `/img/recipe-images/${filename}`;
+}
