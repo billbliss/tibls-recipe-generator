@@ -19,7 +19,8 @@ import {
   getBaseUrl,
   loadGoogleCredentialsFromBase64,
   isUrl,
-  fetchWithRetry
+  fetchWithRetry,
+  fetchImageAsBase64DataUrl
 } from './utils/core-utils';
 
 import {
@@ -88,6 +89,12 @@ app.post(
 );
 
 // This route handles the webhook POST requests
+// It expects a JSON body with the following fields:
+// - `input`: a URL or text input for the recipe
+// - `filename`: an optional filename for an uploaded image or PDF
+// - `responseMode`: controls the response behavior (VIEWER or JSON)
+// - `imageFormat`: optional, values are ['url', 'base64'} - specifies the image format for ogImageUrl
+//    default value comes from process.env.DEFAULT_IMAGE_FORMAT; if that's not present, it defaults to 'url'.
 // It expects a JSON body with an `input` field for a URL; the filename and filetype are used for images/PDFs
 // It uses OpenAI's API to process the input and generate a Tibls JSON object.
 // responseMode controls the response behavior:
@@ -97,6 +104,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
   let input = req.body.input;
   const file = req.file;
   const responseMode: ResponseMode = (req.body.responseMode as ResponseMode) || ResponseMode.VIEWER;
+  const imageFormat = req.body.imageFormat || process.env.DEFAULT_IMAGE_FORMAT || 'url';
 
   // If there's no value in the `input` field, check if a PDF file was uploaded
   // If the file is a PDF, extract text from it using pdf-parse
@@ -358,6 +366,24 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       }
     }
 
+    // If the imageFormat is 'base64', convert the ogImageUrl to a base64 data URL
+    // That is, treat ogImageUrl as by-value, not by-reference
+    if (imageFormat === 'base64') {
+      const urlSource = tiblsJson.itemListElement[0]?.urlSource;
+      let refererOrigin: string | undefined;
+
+      try {
+        // If urlSource is provided, use it to set the Referer header
+        // Without this, some sites may block the request
+        refererOrigin = urlSource ? new URL(urlSource).origin : undefined;
+      } catch {}
+      const base64ImageUrl = await fetchImageAsBase64DataUrl(
+        tiblsJson.itemListElement[0].ogImageUrl,
+        refererOrigin
+      );
+      tiblsJson.itemListElement[0].ogImageUrl = base64ImageUrl;
+    }
+
     switch (responseMode) {
       case ResponseMode.JSON:
         // Return the Tibls JSON object directly
@@ -520,6 +546,28 @@ app.get(['/', '/gist/:gistId'], async (req: Request, res: Response) => {
     res.status(500).send('Error loading recipe viewer.');
   }
 });
+
+// This route converts an image URL to a base64 data URL
+// It fetches the image from the provided URL, converts it to base64, and returns it in a JSON response
+app.get(
+  '/image/base64',
+  async function (req: express.Request, res: express.Response): Promise<void> {
+    const imageUrl = req.query.url as string;
+
+    if (!imageUrl) {
+      res.status(400).json({ error: 'Missing "url" query parameter.' });
+      return;
+    }
+
+    try {
+      const dataUrl = await fetchImageAsBase64DataUrl(imageUrl);
+      res.json({ base64: dataUrl });
+    } catch (err: any) {
+      console.error('Error fetching image:', err);
+      res.status(502).json({ error: err.message || 'Failed to fetch or convert the image.' });
+    }
+  }
+);
 
 // Starts the Express server
 app.listen(port, () => {

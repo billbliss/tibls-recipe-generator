@@ -118,10 +118,25 @@ export async function fetchWithRetry(
   url: string,
   options: any = {},
   maxRetries = 3,
-  initialDelay = 1000
+  initialDelay = 1000,
+  refererOrigin?: string
 ): Promise<any> {
   let attempt = 0;
   let delay = initialDelay;
+  const defaultUserAgent =
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+
+  if (refererOrigin) {
+    options.headers = options.headers || {};
+
+    if (!options.headers['Referer']) {
+      options.headers['Referer'] = refererOrigin;
+    }
+
+    if (!options.headers['User-Agent']) {
+      options.headers['User-Agent'] = defaultUserAgent;
+    }
+  }
 
   while (attempt < maxRetries) {
     try {
@@ -146,5 +161,43 @@ export async function fetchWithRetry(
       await new Promise((resolve) => setTimeout(resolve, delay));
       delay *= 2;
     }
+  }
+}
+
+// Fetches an image from a URL and returns it as a base64-encoded data URL
+// If the image is too large, it returns the original URL instead
+// Uses fetchWithRetry to handle network errors and retries
+export async function fetchImageAsBase64DataUrl(
+  imageUrl: string,
+  refererOrigin?: string
+): Promise<string> {
+  // Max size for BASE64 images varies by browser and platform, but 1,000,000 bytes should be a safe limit
+  // BASE64 encoding increases size by about 33%, so we set a max size of 750,000 bytes
+  const MAX_BASE64_SIZE = 750_000;
+
+  const response = await fetchWithRetry(
+    imageUrl,
+    {
+      headers: {
+        Accept: 'image/*'
+      },
+      responseType: 'arraybuffer'
+    },
+    undefined,
+    undefined,
+    refererOrigin
+  );
+
+  const contentType = response.headers['content-type'];
+  if (!contentType?.startsWith('image/')) {
+    throw new Error(`URL did not return an image (Content-Type: ${contentType})`);
+  }
+
+  const buffer = Buffer.from(response.data);
+
+  if (buffer.length < MAX_BASE64_SIZE) {
+    return `data:${contentType};base64,${buffer.toString('base64')}`;
+  } else {
+    return imageUrl; // Return original URL if too large for base64
   }
 }

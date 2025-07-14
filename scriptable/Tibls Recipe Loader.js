@@ -11,7 +11,7 @@ const webhookUrl = "https://tibls-recipe-generator-ptm9.onrender.com/webhook";
 // Default schema values
 let input = "";
 let filename = "";
-let base64 = "";
+let imageFormat = "";
 
 // Shared URL or text
 if (args.urls.length > 0) {
@@ -45,7 +45,7 @@ else if (args.images.length > 0) {
 const payload = {
   input,
   filename,
-  base64
+  imageFormat
 };
 let req = new Request(webhookUrl);
 req.method = "POST";
