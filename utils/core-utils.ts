@@ -5,6 +5,7 @@ import { createWriteStream } from 'fs';
 import path from 'path';
 import { Request } from 'express';
 import axios from 'axios';
+import { MAX_BASE64_SIZE } from './constants';
 
 // Returns the base URL of the request, used for generating absolute URLs
 // This is useful for generating links to uploaded files or viewer pages
@@ -171,10 +172,6 @@ export async function fetchImageAsBase64DataUrl(
   imageUrl: string,
   refererOrigin?: string
 ): Promise<string> {
-  // Max size for BASE64 images varies by browser and platform, but 1,000,000 bytes should be a safe limit
-  // BASE64 encoding increases size by about 33%, so we set a max size of 750,000 bytes
-  const MAX_BASE64_SIZE = 750_000;
-
   const response = await fetchWithRetry(
     imageUrl,
     {

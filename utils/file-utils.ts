@@ -4,7 +4,9 @@ import { Request } from 'express';
 import pdfParse from 'pdf-parse';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import sharp from 'sharp';
 import { getBaseUrl } from './core-utils';
+import { JPEG_IMAGE_QUALITY, MAX_BASE64_SIZE, MAX_IMAGE_WIDTH } from './constants';
 
 const execFileAsync = promisify(execFile);
 
@@ -83,4 +85,40 @@ export function saveImageToPublicDir(buffer: Buffer, originalName: string): stri
   fs.writeFileSync(fullPath, buffer);
 
   return `/img/recipe-images/${filename}`;
+}
+
+/**
+ * Reads a local image from disk and returns a base64 data URL.
+ * Infers the MIME type (contentType) from the file extension.
+ * If the buffer to be converted is too big, downscale using sharp and encode as JPEG.
+ */
+export async function encodeLocalImageToBase64(filePath: string): Promise<string> {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`File not found: ${filePath}`);
+  }
+
+  const ext = path.extname(filePath).toLowerCase();
+  const contentType =
+    ext === '.webp'
+      ? 'image/webp'
+      : ext === '.png'
+        ? 'image/png'
+        : ext === '.jpg' || ext === '.jpeg'
+          ? 'image/jpeg'
+          : 'application/octet-stream';
+
+  const buffer = fs.readFileSync(filePath);
+
+  if (buffer.length < MAX_BASE64_SIZE) {
+    return `data:${contentType};base64,${buffer.toString('base64')}`;
+  } else {
+    // Downscale large images using sharp and convert to JPEG for smaller base64 sizes
+    const resizedBuffer = await sharp(buffer)
+      .resize({ width: MAX_IMAGE_WIDTH })
+      .jpeg({ quality: JPEG_IMAGE_QUALITY })
+      .toBuffer();
+
+    // Always encode resized as JPEG for universal support
+    return `data:image/jpeg;base64,${resizedBuffer.toString('base64')}`;
+  }
 }
