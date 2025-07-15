@@ -1,5 +1,7 @@
 // This file contains utility functions for handling recipe data in Tibls JSON format.
 
+import { FOOD_KEYWORDS_REGEX } from './constants';
+
 // Applies a per-serving calories override to the recipe if the estimated total calories differ significantly
 // from the model-estimated value.
 // It updates the recipe's calories and adds a note explaining the override.
@@ -41,4 +43,15 @@ export function enforcePerServingCalories(tiblsJson: any): void {
     });
     recipe.calories = perServing;
   }
+}
+
+// Heuristic for determining if a given web page contains a recipe - used to prevent non-recipe pages
+// from further processing.
+export function isLikelyRecipePage(jsonLd: any, title: string, headHtml: string): boolean {
+  const isRecipeJsonLd = !!jsonLd;
+  const hasFoodKeyword = FOOD_KEYWORDS_REGEX.test(title);
+  // Very weak fallback: look for food words in the <head>
+  const headFoodSignals = FOOD_KEYWORDS_REGEX.test(headHtml);
+
+  return isRecipeJsonLd || hasFoodKeyword || headFoodSignals;
 }

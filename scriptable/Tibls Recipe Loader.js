@@ -57,12 +57,20 @@ try {
   const raw = await req.loadString();
   response = JSON.parse(raw);
 
-  const alert = new Alert();
-  alert.title = "✅ Sent!";
-  alert.message = `Viewer:\n${response.viewer}`;
-  await alert.present();
+  if (response.error) {
+    const alert = new Alert();
+    alert.title = "❌ Failed!";
+    alert.message = response.error;
+    await alert.present();
+  } else {
+    const alert = new Alert();
+    alert.title = "✅ Sent!";
+    alert.message = `Viewer:\n${response.viewer}`;
+    await alert.present();
 
-  if (response.viewer) Safari.openInApp(response.viewer);
+    if (response.viewer) Safari.openInApp(response.viewer);
+  }
+
 
 } catch (e) {
   const alert = new Alert();

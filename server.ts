@@ -28,11 +28,17 @@ import {
   generateRecipeFilename,
   extractTextFromPdf,
   extractEmbeddedImageFromPdf,
-  saveImageToPublicDir,
-  encodeLocalImageToBase64
+  saveImageToPublicDir
 } from './utils/file-utils';
 
-import { applyPerServingCaloriesOverride, enforcePerServingCalories } from './utils/recipe-utils';
+// Services used by the routes exposed in this module
+import { handleImageFormat } from './services/imageService';
+
+import {
+  applyPerServingCaloriesOverride,
+  enforcePerServingCalories,
+  isLikelyRecipePage
+} from './utils/recipe-utils';
 
 const signficantPdfTextLength = 50; // Minimum length of meaningful text to consider the PDF valid
 import { ResponseMode } from './types/types';
@@ -225,6 +231,13 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
 
       const headHtml = head.html() || '';
 
+      if (!isLikelyRecipePage(extractedJsonLd, $('title').text(), headHtml)) {
+        res.status(400).json({
+          error: 'This page does not appear to contain a recipe or recognizable cooking content.'
+        });
+        return;
+      }
+
       if (extractedJsonLd) {
         input = `This page contains valid Schema.org JSON-LD recipe data. Use it as the authoritative source for ingredients. Do not modify them.
 
@@ -367,72 +380,8 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       }
     }
 
-    switch (imageFormat) {
-      case 'base64':
-        const urlSource = tiblsJson.itemListElement[0]?.urlSource;
-        let refererOrigin: string | undefined;
-
-        try {
-          // If urlSource is provided, use it to set the Referer header
-          // Without this, some sites may block the request
-          refererOrigin = urlSource ? new URL(urlSource).origin : undefined;
-        } catch {}
-        const base64ImageUrl = await fetchImageAsBase64DataUrl(
-          tiblsJson.itemListElement[0].ogImageUrl,
-          refererOrigin
-        );
-        tiblsJson.itemListElement[0].ogImageUrl = base64ImageUrl;
-        break;
-
-      case 'tempImageBase64':
-        const ogUrl = tiblsJson.itemListElement[0]?.ogImageUrl || '';
-        const isTempImage = ogUrl.includes('/img/recipe-images/');
-
-        if (isTempImage) {
-          try {
-            // Build absolute path to the local temp image
-            const tempPath = path.join(
-              resolveFromRoot('public'),
-              ogUrl.replace(/^.*\/img\//, 'img/')
-            );
-            // Encode local file directly
-            const base64ImageUrl = await encodeLocalImageToBase64(tempPath);
-            if (base64ImageUrl.length > 0) {
-              tiblsJson.itemListElement[0].ogImageUrl = base64ImageUrl;
-
-              // Delete the temporary file after encoding
-              fs.unlink(tempPath, (err) => {
-                if (err) console.warn('Failed to delete temp image:', err);
-              });
-            } // else, do not change it - if encodeLocalImageToBase64 would return too large a string, returns ''
-          } catch (err) {
-            console.warn('Failed to encode local temp image:', err);
-          }
-        }
-        break;
-
-      // Leave ogImageUrl unchanged
-      case 'url':
-      default:
-        break;
-    }
-    // // If the imageFormat is 'base64', convert the ogImageUrl to a base64 data URL
-    // // That is, treat ogImageUrl as by-value, not by-reference
-    // if (imageFormat === 'base64') {
-    //   const urlSource = tiblsJson.itemListElement[0]?.urlSource;
-    //   let refererOrigin: string | undefined;
-
-    //   try {
-    //     // If urlSource is provided, use it to set the Referer header
-    //     // Without this, some sites may block the request
-    //     refererOrigin = urlSource ? new URL(urlSource).origin : undefined;
-    //   } catch {}
-    //   const base64ImageUrl = await fetchImageAsBase64DataUrl(
-    //     tiblsJson.itemListElement[0].ogImageUrl,
-    //     refererOrigin
-    //   );
-    //   tiblsJson.itemListElement[0].ogImageUrl = base64ImageUrl;
-    // }
+    // Reformat ogImageUrl if needed
+    await handleImageFormat(tiblsJson, imageFormat);
 
     switch (responseMode) {
       case ResponseMode.JSON:

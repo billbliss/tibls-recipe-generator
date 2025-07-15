@@ -9,3 +9,6 @@ export const MAX_IMAGE_WIDTH = 800;
 
 // Image quality for a converted image
 export const JPEG_IMAGE_QUALITY = 75;
+
+// Regex used to screen for food/recipe related terms so non-recipe related URLs are detected and rejected
+export const FOOD_KEYWORDS_REGEX = /(?:recipe|ingredients|cooking|baking|kitchen|dish|meal)/i;
