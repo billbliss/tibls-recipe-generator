@@ -111,6 +111,12 @@ Each recipe object must include:
 - If calorie count is missing, estimate it (see Step 3) and add a note.
 - Always include a `notes[]` entry for any inferred, estimated, or post-processed value.
 
+⚠️ Important:
+- Only include **one** recipe object in `itemListElement[]` unless the source explicitly contains multiple distinct recipes.
+- If multiple recipes are detected, **only include the first distinct recipe** and ignore the rest.
+- Never duplicate or re-list the same recipe. If the input appears ambiguous or repeats headers, assume it is still a single recipe and return only one recipe object.
+- Outputting more than one recipe will cause Tibls to reject the JSON.
+
 ---
 
 ## 👨‍🍳 Step 4: Ingredient Handling

@@ -1,10 +1,18 @@
 # Running this script
 
-Type this command in terminal:
+From the project root, run:
 
 ```bash
-npx ts-node test-scripts/compare-recipes.ts
+npx ts-node test/scripts/compare-recipes.ts
 ```
+
+# Folder Structure
+
+- `test/fixtures/tibls-starter-recipes/` → committed local recipe JSON fixtures used by `compare-recipes.ts`
+- `test/scripts/compare-recipes.ts` → this script
+- `debug/chatgpt/` → ChatGPT API request/response logs (gitignored)
+
+The script compares local fixture recipes against live server responses and logs differences.
 
 # Debugging this script
 
@@ -43,7 +51,7 @@ Debugging this script requires launch.json magic. Here's the .vscode/launch.json
       "name": "Debug compare-recipes.ts",
       "preLaunchTask": "wait-for-server",
       "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/ts-node",
-      "runtimeArgs": ["--transpile-only", "${workspaceFolder}/test-scripts/compare-recipes.ts"],
+      "runtimeArgs": ["--transpile-only", "${workspaceFolder}/test/scripts/compare-recipes.ts"],
       "cwd": "${workspaceFolder}",
       "envFile": "${workspaceFolder}/.env",
       "console": "integratedTerminal",
@@ -74,3 +82,4 @@ You also need a .vscode/tasks.json file with the following (referenced above):
     }
   ]
 }
+```

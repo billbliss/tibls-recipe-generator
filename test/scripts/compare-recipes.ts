@@ -1,12 +1,12 @@
-// This script compares local JSON files in the `tibls-starter-recipes` directory
+// This script compares local JSON files in the `test/fixtures/tibls-starter-recipes` directory
 // with the live data fetched from a server.ts endpoint.
 
-// See README.md in the test-scripts directory for more details on how to run/debug this script.
+// See README.md in this directory for more details on how to run/debug this script.
 
 import fs from 'fs/promises';
 import path from 'path';
-import { createLogger, fetchWithRetry, sleep } from '../utils/core-utils';
-import { ResponseMode } from '../types/types';
+import { createLogger, fetchWithRetry, sleep } from '../../utils/core-utils';
+import { ResponseMode } from '../../types/types';
 const { log, error, close } = createLogger('compare-log.txt');
 
 import jsonDiff from 'json-diff';
@@ -21,7 +21,7 @@ type TiblsResponse = {
   }[];
 };
 
-const RECIPES_DIR = './test-scripts/tibls-starter-recipes';
+const RECIPES_DIR = './test/fixtures/tibls-starter-recipes';
 const SERVER_URL = 'http://localhost:3000/webhook'; // only works in development mode currently
 
 // Optional list of filenames to process; if populated, only these will be compared

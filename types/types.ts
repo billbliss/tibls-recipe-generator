@@ -31,3 +31,11 @@ export interface TiblsJson {
   }>;
   [key: string]: any;
 }
+
+export enum WebhookInput {
+  PDF,
+  IMAGE,
+  URL,
+  TEXT,
+  INVALID
+}

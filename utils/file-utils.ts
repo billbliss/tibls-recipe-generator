@@ -1,11 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { Request } from 'express';
 import pdfParse from 'pdf-parse';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import sharp from 'sharp';
-import { getBaseUrl } from './core-utils';
 import { JPEG_IMAGE_QUALITY, MAX_BASE64_SIZE, MAX_IMAGE_WIDTH } from './constants';
 
 const execFileAsync = promisify(execFile);
@@ -52,7 +50,7 @@ export async function extractTextFromPdf(buffer: Buffer): Promise<string> {
 
 export async function extractEmbeddedImageFromPdf(
   tempPdfPath: string,
-  req: Request
+  baseUrl: string
 ): Promise<string | null> {
   const baseName = `img-${Date.now()}`;
   const outputDir = resolveFromRoot('public', 'img', 'recipe-images');
@@ -60,13 +58,14 @@ export async function extractEmbeddedImageFromPdf(
 
   try {
     await execFileAsync('pdfimages', ['-png', tempPdfPath, outputBasePath]);
-    const imageFiles = fs
-      .readdirSync(outputDir)
-      .filter((f) => f.startsWith(baseName) && f.endsWith('.png'));
-
+    const imageFiles = (await fs.promises.readdir(outputDir)).filter(
+      (f) => f.startsWith(baseName) && f.endsWith('.png')
+    );
     if (imageFiles.length > 0) {
       const imageFileName = imageFiles[0];
-      return `${getBaseUrl(req)}/img/recipe-images/${imageFileName}`;
+      return `${baseUrl}/img/recipe-images/${imageFileName}`;
+    } else {
+      return null;
     }
   } catch (err) {
     console.warn('⚠️ Failed to extract image from PDF:', err);

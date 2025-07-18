@@ -40,14 +40,13 @@ tmp/
 /public/img/recipe-images/*
 !/public/img/recipe-images/.gitkeep
 
-# Test data and artifacts
-# test-data/
+# Debug data and artifacts
+debug/
 
 # OS-specific
 .DS_Store
 Thumbs.db
 
-# Google service credentials
 # Node modules
 node_modules/
 .nyc_output/
@@ -88,7 +87,8 @@ tmp/
 *.tmp
 
 # Test data
-test-data/
+debug/
+testrun.txt
 
 # OS-specific
 .DS_Store

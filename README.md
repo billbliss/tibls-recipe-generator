@@ -90,7 +90,7 @@ GIST_PATH=https://gist.github.com/USERNAME/
 GIST_ID=xxxxx
 
 # Optional: generate random test data for dev use
-GENERATE_TEST_DATA=false
+GENERATE_CHATGPT_DEBUG_DATA=false
 
 # Required for PDF OCR: base64 version of Google Cloud Vision credentials
 # To create: base64 credentials.json > credentials.base64

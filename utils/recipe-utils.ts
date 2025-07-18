@@ -55,3 +55,12 @@ export function isLikelyRecipePage(jsonLd: any, title: string, headHtml: string)
 
   return isRecipeJsonLd || hasFoodKeyword || headFoodSignals;
 }
+
+// Heuristic for determining if a given text is likely to be a recipe.
+export function isLikelyRecipeText(text: string): boolean {
+  if (typeof text !== 'string') return false;
+  const wordCount = text.trim().split(/\s+/).length;
+  const hasEnoughWords = wordCount >= 50;
+  const hasFoodKeyword = FOOD_KEYWORDS_REGEX.test(text);
+  return hasEnoughWords && hasFoodKeyword;
+}

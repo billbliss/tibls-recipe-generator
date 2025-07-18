@@ -3,14 +3,22 @@
     "target": "ES2022",
     "module": "commonjs" ,
     "lib": ["ES2022"],
-    "types": ["node"],
-    "typeRoots": ["./node_modules/@types", "./types"],
+    "types": ["node", "vitest/globals"],
     "esModuleInterop": true,
     "strict": true,
     "outDir": "./dist",
     "sourceMap": true,
     "resolveJsonModule": true
   },
-  "include": ["./**/*.ts"],
-  "exclude": ["node_modules"]
+  "files": [
+    "types/global.d.ts"
+  ],
+  // The __tests__ directory is included to ensure tests are type-checked locally,
+  // but excluded to prevent them from being emitted in the Render build output.
+  "include": [
+    "./**/*.ts",
+    "**/__tests__/**/*.ts",
+    "types/**/*.d.ts"
+  ],
+  "exclude": []
 }

@@ -39,9 +39,11 @@ export async function handleImageFormat(tiblsJson: TiblsJson, format: string): P
           recipe.ogImageUrl = base64ImageUrl;
 
           // Delete after encoding
-          fs.unlink(tempPath, (err) => {
-            if (err) console.warn('Failed to delete temp image:', err);
-          });
+          try {
+            await fs.promises.unlink(tempPath);
+          } catch (err) {
+            console.warn('Failed to delete temp image:', err);
+          }
         }
       } catch (err) {
         console.warn('Failed to encode local temp image:', err);
