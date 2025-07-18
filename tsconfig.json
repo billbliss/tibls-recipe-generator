@@ -1,19 +1,22 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "node16",
-    "moduleResolution": "node16",
+    "module": "commonjs",
     "lib": ["ES2022"],
     "types": ["node", "vitest/globals"],
     "esModuleInterop": true,
     "strict": true,
     "outDir": "./dist",
     "sourceMap": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+      "rollup/parseAst": ["./node_modules/rollup/dist/parseAst.d.ts"]
+    },
   },
   "files": [
     "types/global.d.ts"
   ],
+
   // The __tests__ directory is included to ensure tests are type-checked locally,
   // but excluded to prevent them from being emitted in the Render build output.
   "include": [
