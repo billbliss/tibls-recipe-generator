@@ -7,7 +7,14 @@ export default defineConfig({
   test: {
     globals: true, // so you can use `describe`, `it`, `expect` without importing
     environment: 'node', // or 'jsdom' if you’re testing browser-like code
-    exclude: ['node_modules', 'dist', '**/node_modules/**', '**/dist/**'],
+    exclude: [
+      'node_modules',
+      'dist',
+      '**/node_modules/**',
+      '**/dist/**',
+      'archive/**',
+      '**/archive/**'
+    ],
     globalSetup: ['./test/vitest.globalSetup.ts'],
     coverage: {
       reporter: ['text', 'html']

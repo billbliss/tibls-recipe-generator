@@ -17,7 +17,6 @@ import { handleUrl } from './services/urlService';
 import { processRecipeWithChatGPT } from './services/chatgptService';
 import { fetchGistRecipes } from './services/gistService';
 import { renderViewerHtml } from './services/viewerUiService';
-import { handleImageRecipe } from './services/imageRecipeService';
 
 import { WebhookInput, ResponseMode } from './types/types';
 
@@ -118,25 +117,11 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       }
       break;
     case WebhookInput.IMAGE:
-      const baseUrlImg = getBaseUrl(req);
+      // const baseUrlImg = getBaseUrl(req);
       if (!file?.buffer) {
         throw new Error('No image buffer found for uploaded file');
       }
-      try {
-        const imageResult = await handleImageRecipe(
-          file.buffer,
-          responseMode,
-          baseUrlImg,
-          imageFormat
-        );
-        res.json(imageResult);
-        return; // finish processing after returning result
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Unknown image processing error';
-        error('Failed to process image:', err);
-        res.status(500).json({ error: message });
-        return;
-      }
+      break;
     case WebhookInput.URL:
       const recipeUrl = input.trim();
       try {
@@ -160,9 +145,10 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
   }
 
   // Validate input after switch - the functions in ./services, which implement the handle* functions,
-  // are allowed to modify input, so this check must come after these functions have executed
-  if (!input || typeof input !== 'string') {
-    res.status(400).json({ error: 'Missing or invalid `input` field' });
+  // are allowed to modify input, so this check must come after these functions have executed.
+  // Return an error if there's no text or image input.
+  if ((!input || typeof input !== 'string') && !file?.buffer) {
+    res.status(400).json({ error: 'Missing or invalid `input` field or image file' });
     return;
   }
 
@@ -175,7 +161,8 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       responseMode,
       baseUrl,
       req.body.ogImageUrl,
-      imageFormat
+      imageFormat,
+      file?.buffer
     );
     res.json(result);
   } catch (err: any) {

@@ -1,3 +1,11 @@
+/**
+ * NOTE: This is archived legacy code for reference.
+ * It is no longer used in production and not included in builds or tests.
+ *
+ * It was used to have Google Vision do OCR on uploaded images - current version
+ * uses ChatGPT for that directly.
+ */
+
 import { extractTextWithVision } from './ocrService';
 import { processRecipeWithChatGPT } from './chatgptService';
 import { ResponseMode } from '../types/types';

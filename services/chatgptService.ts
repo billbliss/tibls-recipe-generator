@@ -14,12 +14,29 @@ const tiblsPrompt = fs.readFileSync(resolveFromRoot('prompts', 'chatgpt-instruct
 const { log, error } = createLogger('chatgptService-log.txt');
 
 export async function processRecipeWithChatGPT(
-  input: string,
+  textInput: string,
   responseMode: ResponseMode,
   baseUrl: string,
   ogImageUrl?: string,
-  imageFormat?: string
+  imageFormat?: string,
+  imageInput?: Buffer
 ): Promise<any> {
+  // Construct the array of content to be submitted to the ChatGPT API
+  const content: any[] = [];
+
+  // Include text input if there is any
+  if (textInput && typeof textInput === 'string') {
+    content.push({ type: 'text', text: textInput });
+  }
+  // Include an image if there is one
+  if (imageInput) {
+    const base64Image = imageInput.toString('base64');
+    content.push({
+      type: 'image_url',
+      image_url: { url: `data:image/jpeg;base64,${base64Image}` }
+    });
+  }
+
   const chatPayload = {
     model: 'gpt-4o',
     temperature: 0.3,
@@ -36,7 +53,10 @@ export async function processRecipeWithChatGPT(
     tool_choice: { type: 'function', function: { name: 'tiblsRecipe' } },
     messages: [
       { role: 'system', content: tiblsPrompt },
-      { role: 'user', content: [{ type: 'text', text: input }] }
+      {
+        role: 'user',
+        content: content // Dynamic array constructed above
+      }
     ]
   };
 
@@ -85,11 +105,11 @@ export async function processRecipeWithChatGPT(
     tiblsJson.itemListElement[0].ogImageUrl = null;
   }
 
-  // Calories override
+  // Calories override (only performed when there's text input)
   const recipe = tiblsJson?.itemListElement?.[0];
-  if (recipe?.servings && typeof recipe.servings === 'number') {
-    const ambiguous = /less\s+than|approximately|about|~|under/i.test(input);
-    const match = input.match(/\b(\d{2,4})\s*(?:kcal|calories?)\s*(?:per\s+serving|each)\b/i);
+  if (recipe?.servings && typeof recipe.servings === 'number' && typeof textInput === 'string') {
+    const ambiguous = /less\s+than|approximately|about|~|under/i.test(textInput);
+    const match = textInput.match(/\b(\d{2,4})\s*(?:kcal|calories?)\s*(?:per\s+serving|each)\b/i);
     if (!ambiguous && match) {
       const perServingCalories = parseInt(match[1], 10);
       if (!isNaN(perServingCalories)) {
