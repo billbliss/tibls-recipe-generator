@@ -132,7 +132,8 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
           return;
         }
         error('Failed to fetch HTML for URL:', err);
-        res.status(500).json({ error: 'Failed to fetch page HTML from URL' });
+        const errMessage = err instanceof Error ? err.message : String(err);
+        res.status(500).json({ error: `Failed to fetch page HTML from URL: ${errMessage}` });
         return;
       }
       break;

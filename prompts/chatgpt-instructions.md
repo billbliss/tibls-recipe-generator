@@ -33,10 +33,10 @@ When extracting metadata from a webpage:
   - If present and the `content` value is a valid absolute URL pointing to an image (`.jpg`, `.jpeg`, `.png`, `.webp`), use it as the value of `ogImageUrl`.
   - Do not guess or synthesize `ogImageUrl` based on known domain patterns; only use values explicitly found in the page metadata or structured data.
 - If no valid `og:image` tag is found and the JSON-LD data also lacks a valid `"image"` field:
-  - Set `ogImageUrl` to `null` or omit it entirely.
+  - If no valid image URL is found, omit the `ogImageUrl` field entirely. Do not set it to null or fabricate a placeholder.
   - Add a note to `notes[]`:
     ```json
-    { "text": "No og:image or JSON-LD image found; ogImageUrl left unset." }
+    { "text": "No og:image or JSON-LD image found; ogImageUrl not set." }
     ```
 
 If multiple `og:image` tags are present, prefer the first valid one.
@@ -49,6 +49,7 @@ This step ensures the image metadata is reliable and prevents hallucinated value
 - Use a clear photo of the dish as `ogImageUrl` if present.
 - Always generate a `summary` (based on visible context or inferred tone) and include it.
 - Note any OCR ambiguity, handwritten notes, or extra metadata in `notes[]`.
+- Do not populate `urlHost` and `urlSource` because these recipes did not come from a URL.
 
 **If given text:**
 - If an image URL is included as "Use this value for ogImageUrl: ..." at the top of the input, include that in the output as the ogImageUrl field.

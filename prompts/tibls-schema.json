@@ -50,6 +50,7 @@
           "calories": { "type": "integer" },
           "urlSource": { "type": "string" },
           "urlHost": { "type": "string" },
+          "ogImageUrl": { "type": "string" },
           "notes": {
             "type": "array",
             "items": {
