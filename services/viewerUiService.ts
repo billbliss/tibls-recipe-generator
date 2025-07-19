@@ -18,8 +18,8 @@ export function renderViewerHtml(recipes: GistRecipe[]): string {
           <div class="recipe-field"><span class="label">Recipe Name</span>${r.name}</div>
           ${r.description ? `<div class="recipe-field"><span class="label">Summary</span>${r.description}</div>` : ''}
           <div class="recipe-field"><span class="label">Date</span>${r.date || 'Unknown'}</div>
-          <div class="recipe-field"><span class="label">Import Link</span>
-            <a href="${r.tiblsUrl}">Import</a><br>
+          <div class="recipe-field">
+            <button class="import-button" onclick="window.location.href='${r.tiblsUrl}'">Tibls Import</button><br>
             <a href="${r.rawJsonUrl}">Raw JSON</a>
           </div>
         </div>

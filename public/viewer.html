@@ -20,14 +20,23 @@
     <form id="uploadForm" enctype="multipart/form-data">
       <div class="tabs">
         <button type="button" class="tab-button active" data-tab="url">URL</button>
-        <button type="button" class="tab-button" data-tab="file">File</button>
+        <button type="button" class="tab-button" data-tab="file">PDF/Photo</button>
         <button type="button" class="tab-button" data-tab="text">Paste Recipe</button>
       </div>
       <div class="tab-content" id="tab-url">
         <input type="text" id="inputUrl" placeholder="https://example.com/recipe" />
       </div>
       <div class="tab-content" id="tab-file" style="display: none;">
-        <input type="file" id="inputFile" accept=".pdf,.jpg,.png" />
+        <label for="inputFile" class="custom-file-label" style="color: blue; text-decoration: underline; cursor: pointer;">
+          Upload or Take Photo
+        </label>
+        <input 
+          type="file" 
+          id="inputFile" 
+          accept="image/*,.pdf" 
+          multiple 
+          style="display: none;"
+        />
         <div id="previewContainer"></div>
       </div>
       <div class="tab-content" id="tab-text" style="display: none;">
