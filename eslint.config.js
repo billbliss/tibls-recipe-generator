@@ -6,7 +6,7 @@ const tsPlugin = require('@typescript-eslint/eslint-plugin');
 
 module.exports = [
   {
-    ignores: ['dist/', 'node_modules/', 'public/img/recipe-images/']
+    ignores: ['dist/', 'node_modules/', 'public/img/recipe-images/', 'archive']
   },
   {
     files: ['**/*.ts'],
