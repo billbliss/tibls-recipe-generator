@@ -8,14 +8,20 @@
   <title>Tibls Recipe Viewer</title>
 </head>
 <body>
-  <h1><img src="/img/tibls-recipe-converter.png" alt="Tibls Recipe Loader Icon" style="height:40px; vertical-align:middle; margin-right:0.5em;">Tibls Recipe Loader</h1>
+  <div class="header-bar">
+    <h1>
+      <img src="/img/tibls-recipe-converter.png" alt="Tibls Recipe Loader Icon" style="height:40px; vertical-align:middle; margin-right:0.5em;">
+      Tibls Recipe Loader
+    </h1>
+    <a class="new-recipe-button" href="#uploadForm">New Recipe</a>
+  </div>
   <table>
     <tbody>
       {{TABLE_ROWS}}
     </tbody>
   </table>
 
-  <div class="upload-form">
+  <div class="upload-form" id="uploadForm">
     <h2>Upload a Recipe</h2>
     <form id="uploadForm" method="POST" enctype="multipart/form-data">
       <div class="tabs">

@@ -66,7 +66,7 @@ When extracting metadata from a webpage:
 
 - Always parse the `<head>` section in addition to the `<body>`.
 - Specifically extract `<meta property="og:image" content="...">`.
-  - If present and the `content` value is a valid absolute URL pointing to an image (`.jpg`, `.jpeg`, `.png`, `.webp`), use it as the value of `ogImageUrl`.
+  - If the recipe comes from an uploaded image or PDF rather than a URL, do NOT use an external URL. Instead, Base64-encode the selected image and embed it inline as a `data:image/jpeg;base64,...` string for `ogImageUrl`.
   - Do not guess or synthesize `ogImageUrl` based on known domain patterns; only use values explicitly found in the page metadata or structured data.
 - If no valid `og:image` tag is found and the JSON-LD data also lacks a valid `"image"` field:
   - If no valid image URL is found, omit the `ogImageUrl` field entirely. Do not set it to null or fabricate a placeholder.
@@ -86,7 +86,8 @@ This step ensures the image metadata is reliable and prevents hallucinated value
 - Identify and segment: title, ingredients, instructions, time values, servings, and metadata.
 - When detecting ingredients in images or PDFs, prioritize clearly structured lists, columns, or bulleted blocks over narrative paragraphs. Treat any visually separated ingredient list as authoritative and extract all items exactly as they appear, with correct quantities and units. Only pull ingredients from narrative text if they are unique and not listed elsewhere.
 - In INGREDIENTS_ONLY mode, copy the ingredient list verbatim without normalization or inference.
-- Use the clearest or most representative photo of the dish as `ogImageUrl` if present. If multiple images are provided, select the best one for `ogImageUrl` (or the first if unclear).
+- Use the clearest or most representative photo of the finished dish as `ogImageUrl` if present. If multiple images are provided, prioritize the primary dish photo over ingredient lists or text. Always encode the selected photo as a Base64 data URI (`data:image/jpeg;base64,...`) and include it directly as the value of `ogImageUrl`. Do NOT leave it as a filename or relative path.
+- If no clear dish image is found, omit `ogImageUrl` entirely and add a note in `notes[]` stating that no suitable image was detected.
 - Always generate a `summary` (based on visible context or inferred tone) and include it.
 - Note any OCR ambiguity, handwritten notes, or extra metadata in `notes[]`.
 - Do not populate `urlHost` and `urlSource` because these recipes did not come from a URL.
@@ -156,6 +157,9 @@ Each recipe object must include:
 - Only include **one** recipe object in `itemListElement[]` unless the source explicitly contains multiple distinct recipes.
 - If multiple recipes are detected, **only include the first distinct recipe** and ignore the rest.
 - Never duplicate or re-list the same recipe. If the input appears ambiguous or repeats headers, assume it is still a single recipe and return only one recipe object.
+
+IMPORTANT: Sub-recipes, component recipes, or garnish instructions (e.g., sauces, toppings, spice mixes, pickled components) are NOT standalone recipes. They must always be merged into the same single recipe object as the main recipe. Include their ingredients and steps as part of the main recipe, using logical sectionHeader values (e.g., "Pickled Mustard Seeds" as a section under ingredients/steps). NEVER create a separate recipe object for these components.
+
 - Outputting more than one recipe will cause Tibls to reject the JSON.
 
 ---
@@ -264,6 +268,8 @@ Before returning the Tibls JSON, ensure the following:
   - Set to `0` if not estimable, with an explanatory note in `notes[]`
 - `notes[]` includes entries for all inferred, estimated, or post-processed values
 - When multiple images are included, ensure they are merged into a single recipe and do not create duplicates.
+- If `ogImageUrl` is derived from an uploaded image, ensure it is Base64-encoded as a data URI rather than a filename or path.
 
 Failure to include these fields will result in invalid output.
 If your output contains more than one `itemListElement`, you have FAILED. ALWAYS merge all content into exactly one recipe.
+If multiple components, sub-recipes, or garnishes appear, ensure they are merged into the same recipe object with clear sectionHeader groupings, not split into separate recipe objects.
