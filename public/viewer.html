@@ -17,7 +17,7 @@
 
   <div class="upload-form">
     <h2>Upload a Recipe</h2>
-    <form id="uploadForm" enctype="multipart/form-data">
+    <form id="uploadForm" method="POST" enctype="multipart/form-data">
       <div class="tabs">
         <button type="button" class="tab-button active" data-tab="url">URL</button>
         <button type="button" class="tab-button" data-tab="file">PDF/Photo</button>
@@ -28,7 +28,7 @@
       </div>
       <div class="tab-content" id="tab-file" style="display: none;">
         <label for="inputFile" class="custom-file-label" style="color: blue; text-decoration: underline; cursor: pointer;">
-          Upload or Take Photo
+          <span id="uploadFileLabel">Upload or Take Photo</span>
         </label>
         <input 
           type="file" 
@@ -38,6 +38,7 @@
           style="display: none;"
         />
         <div id="previewContainer"></div>
+        <div id="fileUploadStatus" style="margin-top: 0.5em; color: red;"></div>
       </div>
       <div class="tab-content" id="tab-text" style="display: none;">
         <textarea id="inputText" rows="10" placeholder="Paste full recipe text here..."></textarea>

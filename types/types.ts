@@ -1,6 +1,7 @@
 export enum ResponseMode {
   JSON = 'json',
-  VIEWER = 'viewer'
+  VIEWER = 'viewer',
+  INGREDIENTS_ONLY = 'ingredients_only'
 }
 
 export interface TiblsJson {
@@ -38,4 +39,10 @@ export enum WebhookInput {
   URL,
   TEXT,
   INVALID
+}
+
+// A way to indicate intent to ChatGPT regarding what to focus on - ingredients, overall recipe, etc.
+export enum RecipeFocusMode {
+  RECIPE = 'recipe',
+  INGREDIENTS = 'ingredients'
 }

@@ -2,6 +2,7 @@ import request from 'supertest';
 import { app } from '../../server';
 import axios from 'axios';
 import * as imageService from '../../services/imageService';
+import * as chatgptService from '../../services/chatgptService';
 import { describe, it, beforeEach, expect, vi } from 'vitest';
 
 // Mock OpenAI + handleImageFormat
@@ -95,5 +96,51 @@ describe('POST /webhook triggers ChatGPT processing', () => {
 
     expect(res.status).toBe(500);
     expect(res.body.error).toMatch(/No tool call arguments/);
+  });
+
+  it('processes IMAGE input when uploading a single file', async () => {
+    vi.spyOn(chatgptService, 'processImageRecipe').mockResolvedValue({
+      itemListElement: [
+        {
+          name: 'Integration Test Recipe',
+          ingredients: [{ text: 'mock ingredient', sectionHeader: 'Mock Section' }],
+          steps: [{ text: 'mock step', sectionHeader: 'Mock Steps' }]
+        }
+      ]
+    });
+
+    const buffer = Buffer.from('fake-image-data');
+
+    const res = await request(app)
+      .post('/webhook')
+      .attach('filename', buffer, { filename: 'test.jpg', contentType: 'image/jpeg' })
+      .field('responseMode', 'json');
+
+    expect(res.status).toBe(200);
+    expect(res.body.itemListElement[0].name).toBe('Integration Test Recipe');
+  });
+
+  it('processes IMAGE input when uploading multiple files', async () => {
+    vi.spyOn(chatgptService, 'processImageRecipe').mockResolvedValue({
+      itemListElement: [
+        {
+          name: 'Integration Test Recipe',
+          ingredients: [{ text: 'mock ingredient', sectionHeader: 'Mock Section' }],
+          steps: [{ text: 'mock step', sectionHeader: 'Mock Steps' }]
+        }
+      ]
+    });
+
+    const buffer1 = Buffer.from('fake-image-data-1');
+    const buffer2 = Buffer.from('fake-image-data-2');
+
+    const res = await request(app)
+      .post('/webhook')
+      .attach('filename', buffer1, { filename: 'test1.jpg', contentType: 'image/jpeg' })
+      .attach('filename', buffer2, { filename: 'test2.jpg', contentType: 'image/jpeg' })
+      .field('responseMode', 'json');
+
+    expect(res.status).toBe(200);
+    expect(res.body.itemListElement[0].name).toBe('Integration Test Recipe');
   });
 });

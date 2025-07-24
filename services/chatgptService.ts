@@ -4,8 +4,9 @@ import path from 'path';
 import { createLogger } from '../utils/core-utils';
 import { resolveFromRoot, generateRecipeFilename } from '../utils/file-utils';
 import { applyPerServingCaloriesOverride, enforcePerServingCalories } from '../utils/recipe-utils';
-import { ResponseMode } from '../types/types';
+import { ResponseMode, RecipeFocusMode } from '../types/types';
 import { handleImageFormat } from './imageService';
+import sharp from 'sharp';
 
 import tiblsSchemaJson from '../prompts/tibls-schema.json';
 const tiblsSchema = tiblsSchemaJson;
@@ -13,34 +14,123 @@ const tiblsPrompt = fs.readFileSync(resolveFromRoot('prompts', 'chatgpt-instruct
 
 const { log, error } = createLogger('chatgptService-log.txt');
 
+export async function processImageRecipe(
+  textInput: string,
+  responseMode: ResponseMode,
+  baseUrl: string,
+  ogImageUrl?: string,
+  imageFormat?: string,
+  images: Buffer[] = []
+): Promise<any> {
+  // Auto-rotate based on EXIF and return a buffer (want to ensure images are sent to ChatGPT right-side-up)
+  const normalizedImages = await Promise.all(
+    images.map(async (img) => {
+      return await sharp(img.buffer).rotate().toBuffer();
+    })
+  );
+
+  // Pass 1: extract ingredients only
+  const rawIngredients = await processRecipeWithChatGPT(
+    textInput,
+    ResponseMode.INGREDIENTS_ONLY,
+    baseUrl,
+    ogImageUrl,
+    imageFormat,
+    normalizedImages,
+    RecipeFocusMode.INGREDIENTS
+  );
+
+  // log(`Extracted raw ingredients from first pass:\n${rawIngredients}`);
+
+  // Embed the extracted ingredients into the second pass prompt
+  const injectedPrompt = `Here is the exact ingredient list extracted verbatim from the recipe images:
+    ${rawIngredients}
+    Do NOT alter, add, or remove any ingredients. Use this exact list when creating the Tibls JSON.
+    Now here is the full recipe text for context:
+    ${textInput}`;
+
+  // Pass 2: build the final Tibls JSON using the injected ingredients
+  const finalResult = await processRecipeWithChatGPT(
+    injectedPrompt,
+    responseMode,
+    baseUrl,
+    ogImageUrl,
+    undefined,
+    normalizedImages,
+    RecipeFocusMode.RECIPE
+  );
+
+  // ✅ Only return the final JSON, not the first-pass text
+  return finalResult;
+}
+
 export async function processRecipeWithChatGPT(
   textInput: string,
   responseMode: ResponseMode,
   baseUrl: string,
   ogImageUrl?: string,
   imageFormat?: string,
-  imageInput?: Buffer
+  imageInputs?: Buffer[],
+  focusMode?: RecipeFocusMode
 ): Promise<any> {
   // Construct the array of content to be submitted to the ChatGPT API
+  const normalizedFocus = focusMode ?? RecipeFocusMode.RECIPE;
   const content: any[] = [];
 
   // Include text input if there is any
   if (textInput && typeof textInput === 'string') {
     content.push({ type: 'text', text: textInput });
   }
-  // Include an image if there is one
-  if (imageInput) {
-    const base64Image = imageInput.toString('base64');
-    content.push({
-      type: 'image_url',
-      image_url: { url: `data:image/jpeg;base64,${base64Image}` }
-    });
+  // Include images if there are any
+  if (imageInputs && imageInputs.length > 0) {
+    for (const buf of imageInputs) {
+      const base64Image = buf.toString('base64');
+      content.push({
+        type: 'image_url',
+        image_url: { url: `data:image/jpeg;base64,${base64Image}` }
+      });
+    }
   }
 
-  const chatPayload = {
+  let dynamicPrompt = '';
+
+  if (normalizedFocus === RecipeFocusMode.INGREDIENTS) {
+    dynamicPrompt = `You are looking ONLY for a list of recipe ingredients.
+      Return EXACTLY the ingredients you see, each on its own line, in the same wording and order as written.
+      - Do NOT include instructions, narrative text, serving sizes, headings, or explanations.
+      - Do NOT summarize or reformat.
+      - If no ingredients are visible, return an empty string.
+      - Do NOT include any other text before or after the list.`;
+  } else {
+    // existing behavior
+    if (imageInputs?.length && textInput) {
+      dynamicPrompt = `Attached are ${imageInputs.length} image(s) of the same recipe along with text. Merge all visible and textual information into one single recipe.`;
+    } else if (imageInputs?.length) {
+      dynamicPrompt = `Attached are ${imageInputs.length} image(s) of the same recipe. Extract and combine all visible information into one single recipe.`;
+    } else {
+      dynamicPrompt = `Extract a single recipe from the provided text.`;
+    }
+  }
+
+  const messages: any[] = [];
+
+  // Only include tiblsPrompt for full RECIPE mode
+  if (normalizedFocus === RecipeFocusMode.RECIPE) {
+    messages.push({ role: 'system', content: tiblsPrompt });
+  }
+
+  messages.push({ role: 'user', content: dynamicPrompt });
+  messages.push({ role: 'user', content: content });
+
+  const chatPayload: any = {
     model: 'gpt-4o',
     temperature: 0.3,
-    tools: [
+    messages
+  };
+
+  // Only include function tools for full RECIPE mode
+  if (responseMode !== ResponseMode.INGREDIENTS_ONLY) {
+    chatPayload.tools = [
       {
         type: 'function',
         function: {
@@ -49,16 +139,9 @@ export async function processRecipeWithChatGPT(
           parameters: tiblsSchema
         }
       }
-    ],
-    tool_choice: { type: 'function', function: { name: 'tiblsRecipe' } },
-    messages: [
-      { role: 'system', content: tiblsPrompt },
-      {
-        role: 'user',
-        content: content // Dynamic array constructed above
-      }
-    ]
-  };
+    ];
+    chatPayload.tool_choice = { type: 'function', function: { name: 'tiblsRecipe' } };
+  }
 
   // Validate required keys
   if (!process.env.OPENAI_API_KEY) throw new Error('Missing OpenAI API key');
@@ -87,6 +170,13 @@ export async function processRecipeWithChatGPT(
     }
   });
 
+  // If we're just extracting ingredients, return the raw text content
+  if (responseMode === ResponseMode.INGREDIENTS_ONLY) {
+    const rawIngredients = openaiRes.data.choices?.[0]?.message?.content?.trim();
+    if (!rawIngredients) throw new Error('No ingredients returned from OpenAI');
+    return rawIngredients;
+  }
+
   const toolCall = openaiRes.data.choices?.[0]?.message?.tool_calls?.[0];
   const argsString = toolCall?.function?.arguments;
   if (!argsString) throw new Error('No tool call arguments returned from OpenAI');
@@ -98,11 +188,9 @@ export async function processRecipeWithChatGPT(
     tiblsJson.itemListElement[0].ogImageUrl = ogImageUrl;
   }
 
-  // ✅ Always ensure at least one element and normalize ogImageUrl
+  // ✅ Always ensure at least one element exists, but don’t force ogImageUrl=null
   if (!tiblsJson.itemListElement || tiblsJson.itemListElement.length === 0) {
-    tiblsJson.itemListElement = [{ ogImageUrl: null }];
-  } else if (tiblsJson.itemListElement[0].ogImageUrl === undefined) {
-    tiblsJson.itemListElement[0].ogImageUrl = null;
+    tiblsJson.itemListElement = [{}];
   }
 
   // Calories override (only performed when there's text input)

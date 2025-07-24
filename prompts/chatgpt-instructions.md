@@ -10,6 +10,42 @@ Convert any provided recipe (from a URL, PDF, or image) into valid Tibls JSON as
 - Always include a concise `summary` for each recipe, generated if necessary.
 - If any field is missing or unclear, supplement from visible content or generate a suitable value and add a note to `notes[]`.
 
+> **Special Mode: INGREDIENTS_ONLY**
+> When explicitly instructed to extract only ingredients, return just the exact ingredient list(s) as plain text.
+> - Preserve order, spelling, units, and section headers exactly.
+> - Do NOT output JSON, schema, or any other content.
+
+---
+
+## 🔄 Conditional Two-Pass Workflow
+
+The recipe conversion runs differently based on the source type:
+
+- **For URLs, clean text input, or PDFs that have already been OCR’d externally:**
+  - Perform a single direct pass.
+  - Use JSON-LD if complete; otherwise, parse visible content directly.
+  - Immediately refine and validate into Tibls JSON (no intermediate pass required).
+
+- **For raw raster images (photos or scans that have NOT been OCR’d):**
+  - Perform TWO internal passes within a single prompt:
+    1. **Pass 1 – Raw Extraction & Structuring**
+       - OCR the image.
+       - Identify and segment title, servings, times, ingredients, steps, and metadata.
+       - Capture all visible text exactly as it appears, including ambiguities.
+       - Do NOT output yet; keep as internal draft.
+    2. **Pass 2 – Refinement & Validation**
+       - Clean and normalize ingredient and step lists while preserving original units and phrasing.
+       - Add `sectionHeader` groupings for both ingredients and steps.
+       - Infer or clarify any missing time values, servings, or ranges.
+       - Estimate calories if not provided.
+       - Add all necessary `notes[]` entries for inferred/estimated values.
+       - Validate final JSON strictly against the Tibls schema.
+       - Output ONLY the final validated Tibls JSON.
+
+Unless explicitly instructed otherwise, always return only the fully refined JSON. If the user requests “show Pass 1 output,” pause after Pass 1 and provide the structured draft before refinement.
+
+> **Note:** When API rasterization support becomes available, this same two-pass workflow will also apply to scanned PDFs, unifying PDFs and images under the same process.
+
 ---
 
 ## 📥 Step 1: Source Type Handling
@@ -45,8 +81,12 @@ This step ensures the image metadata is reliable and prevents hallucinated value
 
 **If given a PDF or image:**
 - Use OCR to extract text if needed.
+- If multiple images are provided, always treat them as different parts or angles of the same single recipe. Combine all visible information from all images into one recipe.
+- Even if the text or images appear to contain multiple recipes, ALWAYS merge them into ONE recipe. NEVER include more than one recipe object in `itemListElement[]`.
 - Identify and segment: title, ingredients, instructions, time values, servings, and metadata.
-- Use a clear photo of the dish as `ogImageUrl` if present.
+- When detecting ingredients in images or PDFs, prioritize clearly structured lists, columns, or bulleted blocks over narrative paragraphs. Treat any visually separated ingredient list as authoritative and extract all items exactly as they appear, with correct quantities and units. Only pull ingredients from narrative text if they are unique and not listed elsewhere.
+- In INGREDIENTS_ONLY mode, copy the ingredient list verbatim without normalization or inference.
+- Use the clearest or most representative photo of the dish as `ogImageUrl` if present. If multiple images are provided, select the best one for `ogImageUrl` (or the first if unclear).
 - Always generate a `summary` (based on visible context or inferred tone) and include it.
 - Note any OCR ambiguity, handwritten notes, or extra metadata in `notes[]`.
 - Do not populate `urlHost` and `urlSource` because these recipes did not come from a URL.
@@ -126,6 +166,8 @@ Each recipe object must include:
   - If the prompt includes `recipeIngredient[]` from a complete JSON-LD block, use it as the authoritative source for `ingredients[]`. Do **not** regenerate, reword, reformat, or cross-check ingredients against the rest of the page. Use the provided `recipeIngredient[]` values *literally and exclusively*.
   - If a valid and complete JSON-LD `Recipe` object is present (with all `recipeIngredient` values and quantities), use it as the authoritative source for `ingredients[]`. Do not regenerate, rewrite, reformat, or substitute ingredient text in any way. Preserve the ingredients exactly as listed in the JSON-LD data. Skip all fallback logic below in this case.
   - Do not reference visible content to revise or validate these ingredients. Do not remove, rephrase, or infer any part of the text. Use the `recipeIngredient[]` array literally and exclusively.
+
+- When extracting from images, PDFs, or scanned layouts, always prefer the visually distinct ingredient list. Do not merge narrative descriptions into the primary list unless they contain unique ingredients. Maintain original formatting and units whenever possible.
 
 - If JSON-LD is missing or incomplete:
   - Extract every ingredient mentioned anywhere in the recipe, even if it appears only in instructions or narrative text.
@@ -221,5 +263,7 @@ Before returning the Tibls JSON, ensure the following:
   - Estimated if possible
   - Set to `0` if not estimable, with an explanatory note in `notes[]`
 - `notes[]` includes entries for all inferred, estimated, or post-processed values
+- When multiple images are included, ensure they are merged into a single recipe and do not create duplicates.
 
 Failure to include these fields will result in invalid output.
+If your output contains more than one `itemListElement`, you have FAILED. ALWAYS merge all content into exactly one recipe.

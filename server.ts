@@ -14,7 +14,7 @@ import { resolveFromRoot, saveImageToPublicDir } from './utils/file-utils';
 // Services used by the routes exposed in this module
 import { handlePdfFile } from './services/pdfService';
 import { handleUrl } from './services/urlService';
-import { processRecipeWithChatGPT } from './services/chatgptService';
+import { processRecipeWithChatGPT, processImageRecipe } from './services/chatgptService';
 import { fetchGistRecipes } from './services/gistService';
 import { renderViewerHtml } from './services/viewerUiService';
 
@@ -78,17 +78,18 @@ app.post(
 // responseMode controls the response behavior:
 // - VIEWER: returns a URL to the viewer page for the generated recipe
 // - JSON: returns the raw Tibls JSON object
-app.post('/webhook', upload.single('filename'), async (req: Request, res: Response) => {
+app.post('/webhook', upload.array('filename'), async (req: Request, res: Response) => {
   let input = req.body.input;
-  const file = req.file;
+  const files = (req.files as Express.Multer.File[]) || [];
+  const firstFile = files.length > 0 ? files[0] : undefined;
   const responseMode: ResponseMode = (req.body.responseMode as ResponseMode) || ResponseMode.VIEWER;
   const imageFormat = req.body.imageFormat || process.env.DEFAULT_IMAGE_FORMAT || 'url';
   let webhookInput: WebhookInput = WebhookInput.INVALID;
 
   // Determine what's being input to the webhook
-  if (!input && file && file.mimetype === 'application/pdf') {
+  if (!input && firstFile && firstFile.mimetype === 'application/pdf') {
     webhookInput = WebhookInput.PDF;
-  } else if (!input && file && file.mimetype.startsWith('image/')) {
+  } else if (!input && firstFile && firstFile.mimetype.startsWith('image/')) {
     webhookInput = WebhookInput.IMAGE;
   } else if (input && typeof input === 'string' && isUrl(input)) {
     webhookInput = WebhookInput.URL;
@@ -99,11 +100,11 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
   switch (webhookInput) {
     case WebhookInput.PDF:
       const baseUrl = getBaseUrl(req);
-      if (!file?.buffer) {
+      if (!firstFile?.buffer) {
         throw new Error('No PDF buffer found for uploaded file');
       }
       try {
-        const pdfResult = await handlePdfFile(file.buffer, baseUrl);
+        const pdfResult = await handlePdfFile(firstFile.buffer, baseUrl);
         // If needed, assign extracted text or ogImageUrl back to req.body
         input = pdfResult.text;
         if (pdfResult.ogImageUrl) {
@@ -117,9 +118,8 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
       }
       break;
     case WebhookInput.IMAGE:
-      // const baseUrlImg = getBaseUrl(req);
-      if (!file?.buffer) {
-        throw new Error('No image buffer found for uploaded file');
+      if (files.length === 0) {
+        throw new Error('No image buffers found for uploaded files');
       }
       break;
     case WebhookInput.URL:
@@ -148,7 +148,7 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
   // Validate input after switch - the functions in ./services, which implement the handle* functions,
   // are allowed to modify input, so this check must come after these functions have executed.
   // Return an error if there's no text or image input.
-  if ((!input || typeof input !== 'string') && !file?.buffer) {
+  if ((!input || typeof input !== 'string') && !firstFile?.buffer) {
     res.status(400).json({ error: 'Missing or invalid `input` field or image file' });
     return;
   }
@@ -157,14 +157,26 @@ app.post('/webhook', upload.single('filename'), async (req: Request, res: Respon
   const baseUrl = getBaseUrl(req);
 
   try {
-    const result = await processRecipeWithChatGPT(
-      input,
-      responseMode,
-      baseUrl,
-      req.body.ogImageUrl,
-      imageFormat,
-      file?.buffer
-    );
+    let result: any;
+    if (webhookInput === WebhookInput.IMAGE) {
+      const imageBuffers = files.map((f) => f.buffer);
+      result = await processImageRecipe(
+        input,
+        responseMode,
+        baseUrl,
+        req.body.ogImageUrl,
+        imageFormat,
+        imageBuffers
+      );
+    } else {
+      result = await processRecipeWithChatGPT(
+        input,
+        responseMode,
+        baseUrl,
+        req.body.ogImageUrl,
+        imageFormat
+      );
+    }
     res.json(result);
   } catch (err: any) {
     error('Error:', err);

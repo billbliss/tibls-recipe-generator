@@ -1,4 +1,8 @@
 let pastedImageUrl = ""; // If there is an image pasted, this will hold the URL
+let uploadedFileType = null; // 'pdf' or 'image'
+let uploadedImagesCount = 0;
+const MAX_IMAGES = 4;
+let selectedFiles = []; // Accumulate multiple photo captures across separate camera invocations
 
 const dropZone = document.getElementById("imagePasteZone");
 if (dropZone) dropZone.focus(); // Ensure dropZone is focusable on load for paste
@@ -6,26 +10,109 @@ if (dropZone) dropZone.focus(); // Ensure dropZone is focusable on load for past
 const inputFile = document.getElementById("inputFile"); // If the user uploads a file, this retrieves its value
 if (inputFile) {
   inputFile.addEventListener("change", function () {
-    const file = this.files[0];
+    const files = Array.from(this.files);
+    selectedFiles.push(...files); // ✅ accumulate all newly selected files
     const preview = document.getElementById("previewContainer");
-    preview.innerHTML = "";
+    const statusMsg = document.getElementById("fileUploadStatus");
+    const labelSpan = document.getElementById("uploadFileLabel");
+    if (statusMsg) statusMsg.textContent = "";
 
-    if (file) {
-      const reader = new FileReader();
+    for (const file of files) {
+      if (uploadedFileType === 'pdf') {
+        if (statusMsg) statusMsg.textContent = "You can only upload one PDF file at a time.";
+        return;
+      }
+      if (uploadedFileType === 'image' && file.type === 'application/pdf') {
+        if (statusMsg) statusMsg.textContent = "You can’t mix images and PDFs.";
+        return;
+      }
+      if (uploadedFileType === null) {
+        uploadedFileType = file.type === 'application/pdf' ? 'pdf' : 'image';
+      }
 
       if (file.type.startsWith("image/")) {
+        if (uploadedImagesCount >= MAX_IMAGES) {
+          if (statusMsg) statusMsg.textContent = "You’ve reached the maximum number of photos to upload.";
+          const uploadLabel = document.querySelector('label[for="inputFile"]');
+          if (uploadLabel) {
+            uploadLabel.removeAttribute('for');
+            uploadLabel.style.pointerEvents = 'none';
+            uploadLabel.style.color = 'gray';
+            uploadLabel.style.textDecoration = 'none';
+          }
+          return;
+        }
+        uploadedImagesCount++;
+        const reader = new FileReader();
         reader.onload = function (e) {
+          // Create container div for image and remove button
+          const container = document.createElement("div");
+          container.style.position = "relative";
+          container.style.display = "inline-block";
+          container.style.margin = "5px";
+
           const img = document.createElement("img");
           img.src = e.target.result;
-          preview.appendChild(img);
+          img.style.maxWidth = "150px";
+          img.style.maxHeight = "150px";
+
+          const removeBtn = document.createElement("button");
+          removeBtn.textContent = "×";
+          removeBtn.style.position = "absolute";
+          removeBtn.style.top = "0";
+          removeBtn.style.right = "0";
+          removeBtn.style.background = "rgba(0,0,0,0.5)";
+          removeBtn.style.color = "white";
+          removeBtn.style.border = "none";
+          removeBtn.style.cursor = "pointer";
+
+          removeBtn.addEventListener("click", () => {
+            preview.removeChild(container);
+            uploadedImagesCount--;
+            if (uploadedImagesCount < MAX_IMAGES) {
+              if (labelSpan) labelSpan.textContent = uploadedImagesCount > 0 ? "Upload or Take Another Photo" : "Upload or Take Photo";
+              const uploadLabel = document.querySelector('label');
+              if (uploadLabel && !uploadLabel.hasAttribute('for')) {
+                uploadLabel.setAttribute('for', 'inputFile');
+                uploadLabel.style.pointerEvents = 'auto';
+                uploadLabel.style.color = 'blue';
+                uploadLabel.style.textDecoration = 'underline';
+              }
+            }
+          });
+
+          container.appendChild(img);
+          container.appendChild(removeBtn);
+          preview.appendChild(container);
         };
         reader.readAsDataURL(file);
       } else if (file.type === "application/pdf") {
         const p = document.createElement("p");
         p.textContent = `Selected PDF: ${file.name}`;
         preview.appendChild(p);
+        if (labelSpan && labelSpan.parentElement) {
+          labelSpan.parentElement.style.display = 'none';
+        }
       } else {
-        preview.textContent = "Unsupported file type.";
+        if (statusMsg) statusMsg.textContent = "Unsupported file type.";
+      }
+    }
+    // Update label after processing files
+    if (uploadedFileType === 'image') {
+      if (labelSpan && labelSpan.parentElement) {
+        labelSpan.parentElement.style.display = '';
+      }
+      if (uploadedImagesCount < MAX_IMAGES) {
+        if (labelSpan) labelSpan.textContent = uploadedImagesCount > 0 ? "Upload or Take Another Photo" : "Upload or Take Photo";
+      } else if (uploadedImagesCount >= MAX_IMAGES) {
+        if (labelSpan) labelSpan.textContent = "You’ve reached the maximum number of photos to upload.";
+        const uploadLabel = document.querySelector('label[for="inputFile"]');
+        if (uploadLabel) {
+          uploadLabel.removeAttribute('for');
+          uploadLabel.style.pointerEvents = 'none';
+          uploadLabel.style.color = 'gray';
+          uploadLabel.style.textDecoration = 'none';
+        }
       }
     }
   });
@@ -53,7 +140,7 @@ document.getElementById("uploadForm").addEventListener("submit", async function 
 
   if (type === "url") formData.append("input", value);
   if (type === "file") {
-    formData.append("filename", value);
+    selectedFiles.forEach(file => formData.append("filename", file));
   }
   if (type === "text") {
     let textInput = value;
@@ -117,7 +204,10 @@ document.querySelectorAll('.tab-button').forEach(button => {
 function getActiveInput() {
   const activeTab = document.querySelector('.tab-button.active').getAttribute('data-tab');
   if (activeTab === 'url') return { type: 'url', value: document.getElementById('inputUrl').value };
-  if (activeTab === 'file') return { type: 'file', value: document.getElementById('inputFile').files[0] };
+  if (activeTab === 'file') {
+    const files = Array.from(document.getElementById('inputFile').files);
+    return { type: 'file', value: files };
+  }
   if (activeTab === 'text') return { type: 'text', value: document.getElementById('inputText').value };
 }
 
