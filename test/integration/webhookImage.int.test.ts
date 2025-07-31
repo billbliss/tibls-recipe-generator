@@ -2,6 +2,39 @@ import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import { app } from '../../server';
 import * as chatgptService from '../../services/chatgptService';
+import type { TiblsRecipeEnvelope } from '../../types/types';
+
+const mockImageResponse: TiblsRecipeEnvelope = {
+  '@type': 'application/tibls+json',
+  itemListElement: [
+    {
+      '@type': 'https://tibls.app/types/recipe',
+      id: 'mock-id-image',
+      name: 'Integration Test Recipe',
+      ingredients: [{ text: 'mock ingredient', sectionHeader: 'Mock Section' }],
+      steps: [{ text: 'mock step', sectionHeader: 'Mock Steps' }]
+    }
+  ]
+};
+
+const mockColumnLayoutResponse: TiblsRecipeEnvelope = {
+  '@type': 'application/tibls+json',
+  itemListElement: [
+    {
+      '@type': 'https://tibls.app/types/recipe',
+      id: 'mock-id-column',
+      name: 'Column Layout Recipe',
+      ingredients: [
+        { text: '2 cups flour', sectionHeader: 'Dough' },
+        { text: '1 egg', sectionHeader: '' }
+      ],
+      steps: [
+        { text: 'Mix flour with egg.', sectionHeader: 'Prep' },
+        { text: 'Bake for 20 minutes.', sectionHeader: 'Bake' }
+      ]
+    }
+  ]
+};
 
 describe('POST /webhook with image input', () => {
   beforeEach(() => {
@@ -11,15 +44,7 @@ describe('POST /webhook with image input', () => {
     vi.resetAllMocks();
   });
   it('returns Tibls JSON for an uploaded recipe image', async () => {
-    vi.spyOn(chatgptService, 'processImageRecipe').mockResolvedValue({
-      itemListElement: [
-        {
-          name: 'Integration Test Recipe',
-          ingredients: [{ text: 'mock ingredient', sectionHeader: 'Mock Section' }],
-          steps: [{ text: 'mock step', sectionHeader: 'Mock Steps' }]
-        }
-      ]
-    });
+    vi.spyOn(chatgptService, 'processImageRecipe').mockResolvedValue(mockImageResponse);
 
     const res = await request(app)
       .post('/webhook')
@@ -36,15 +61,7 @@ describe('POST /webhook with image input', () => {
   });
 
   it('returns Tibls JSON for multiple uploaded recipe images', async () => {
-    vi.spyOn(chatgptService, 'processImageRecipe').mockResolvedValue({
-      itemListElement: [
-        {
-          name: 'Integration Test Recipe',
-          ingredients: [{ text: 'mock ingredient', sectionHeader: 'Mock Section' }],
-          steps: [{ text: 'mock step', sectionHeader: 'Mock Steps' }]
-        }
-      ]
-    });
+    vi.spyOn(chatgptService, 'processImageRecipe').mockResolvedValue(mockImageResponse);
 
     const res = await request(app)
       .post('/webhook')
@@ -64,21 +81,7 @@ describe('POST /webhook with image input', () => {
   }, 10000);
 
   it('processes IMAGE input with ingredients in one column and instructions/picture in another', async () => {
-    vi.spyOn(chatgptService, 'processImageRecipe').mockResolvedValue({
-      itemListElement: [
-        {
-          name: 'Column Layout Recipe',
-          ingredients: [
-            { text: '2 cups flour', sectionHeader: 'Dough' },
-            { text: '1 egg', sectionHeader: '' }
-          ],
-          steps: [
-            { text: 'Mix flour with egg.', sectionHeader: 'Prep' },
-            { text: 'Bake for 20 minutes.', sectionHeader: 'Bake' }
-          ]
-        }
-      ]
-    });
+    vi.spyOn(chatgptService, 'processImageRecipe').mockResolvedValue(mockColumnLayoutResponse);
 
     const res = await request(app)
       .post('/webhook')
@@ -97,8 +100,11 @@ describe('POST /webhook with image input', () => {
 
   it('returns Tibls JSON for text plus an uploaded recipe image', async () => {
     vi.spyOn(chatgptService, 'processRecipeWithChatGPT').mockResolvedValue({
+      '@type': 'application/tibls+json',
       itemListElement: [
         {
+          '@type': 'https://tibls.app/types/recipe',
+          id: 'mock-id-text-image',
           name: 'Mock Text+Image Recipe',
           ingredients: [{ text: 'mock text+image ingredient', sectionHeader: 'Mock Section' }],
           steps: [{ text: 'mock text+image step', sectionHeader: 'Mock Steps' }]
