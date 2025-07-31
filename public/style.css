@@ -5,10 +5,23 @@ html {
 body {
   background-color: #000; /* Optional: make contrast match card/table background */
   color: #eee;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, 
+    Cantarell, "Helvetica Neue", sans-serif;
 }
 
 h1 {
   margin-left: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem; /* spacing between icon and text */
+}
+
+.sort-button {
+  margin-left: 1rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  font-family: inherit;
 }
 
 .recipe-card {
@@ -241,6 +254,7 @@ label {
   padding: 0;
   column-gap: 2rem;
   column-width: 200px; /* auto-fits columns based on available width */
+  font-size: 0.6rem;
 }
 
 .recipe-directory li {

@@ -544,3 +544,44 @@ document.addEventListener("paste", (e) => {
     e.stopPropagation();
   }
 }, true);
+
+
+document.addEventListener("DOMContentLoaded", () => {
+  const toggleButton = document.getElementById("sort-toggle");
+  const list = document.getElementById("recipe-index");
+
+  if (!toggleButton || !list) return;
+
+  let sortByDate = false;
+
+  function parseDate(str) {
+    const match = str.match(/\((\d{1,2}-\w+-\d{4})\)$/);
+    return match ? new Date(match[1]) : new Date(0);
+  }
+
+  function sortItems() {
+    const items = Array.from(list.querySelectorAll("li"));
+
+    items.sort((a, b) => {
+      const textA = a.textContent.trim();
+      const textB = b.textContent.trim();
+      if (sortByDate) {
+        return parseDate(textB) - parseDate(textA);
+      } else {
+        return textA.localeCompare(textB);
+      }
+    });
+
+    list.innerHTML = "";
+    items.forEach(item => list.appendChild(item));
+    toggleButton.textContent = sortByDate ? "Sort by Name" : "Sort by Date";
+  }
+
+  toggleButton.addEventListener("click", () => {
+    sortByDate = !sortByDate;
+    sortItems();
+  });
+
+  // Initial sort
+  sortItems();
+});

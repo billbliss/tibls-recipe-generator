@@ -52,8 +52,8 @@ export function renderViewerHtml(recipes: RecipeRecord[]): string {
 
   const recipeDirectory = `
     <div class="recipe-directory">
-      <h2>Recipe Index</h2>
-      <ul>
+      <h2>Recipe Index<button id="sort-toggle" class="sort-button">Sort by Date</button></h2>
+      <ul id="recipe-index">
         ${indexLinks}
       </ul>
     </div>
