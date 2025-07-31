@@ -1,15 +1,11 @@
 import request from 'supertest';
 import { app } from '../../server';
 import axios from 'axios';
-import * as imageService from '../../services/imageService';
 import * as chatgptService from '../../services/chatgptService';
 import { describe, it, beforeEach, expect, vi } from 'vitest';
 
-// Mock OpenAI + handleImageFormat
+// Mock OpenAI
 vi.mock('axios');
-vi.mock('../../services/imageService', () => ({
-  handleImageFormat: vi.fn().mockResolvedValue(undefined)
-}));
 
 describe('POST /webhook triggers ChatGPT processing', () => {
   const fakeToolArgs = {
@@ -51,7 +47,6 @@ describe('POST /webhook triggers ChatGPT processing', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.itemListElement[0].name).toBe('Integration Test Recipe');
-    expect(imageService.handleImageFormat).toHaveBeenCalled();
   });
 
   it('returns queued viewer URL for ResponseMode.VIEWER', async () => {
@@ -76,7 +71,7 @@ describe('POST /webhook triggers ChatGPT processing', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('queued');
-    expect(res.body.viewer).toContain('/gist/fake-gist');
+    expect(res.body.viewer).toContain('fake-filename.json');
   });
 
   it('returns 500 if OpenAI returns no tool call arguments', async () => {

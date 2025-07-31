@@ -55,6 +55,7 @@ export function loadGoogleCredentialsFromBase64() {
   fs.writeFileSync(credPath, json);
 
   process.env.GOOGLE_APPLICATION_CREDENTIALS = credPath;
+  return credPath;
 }
 
 // Checks if a string is a valid URL

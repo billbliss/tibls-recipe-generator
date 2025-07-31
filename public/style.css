@@ -47,6 +47,12 @@ h1 {
   color: #ccc;
 }
 
+.default-img {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 button {
   font-size: 1rem;
   font-weight: 600;
@@ -173,8 +179,11 @@ label {
 }
 
 .thumbnail {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  max-height: 180px;
+  height: 100%;
   object-fit: cover;
   border-radius: 4px;
 }
@@ -271,4 +280,127 @@ label {
 
 .new-recipe-button:hover {
   background-color: #666;
+}
+.image-container {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+}
+
+.image-container::before {
+  content: "";
+  display: block;
+  padding-top: 100%;
+}
+
+.image-wrapper {
+  width: 75%;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
+.edit-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: none;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  padding: 8px;
+  cursor: pointer;
+  z-index: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-button svg {
+  width: 20px;
+  height: 20px;
+  fill: white;
+}
+
+.image-container:hover .edit-button {
+  display: flex;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .edit-button {
+    display: flex;
+  }
+}
+
+#cropper-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.8);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+}
+
+#cropper-modal .modal-inner {
+  background: white;
+  padding: 16px;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  position: relative;
+  animation: fadeIn 0.3s ease-out;
+}
+
+#cropper-image {
+  display: block;
+  width: 100%;
+  max-width: 90vw;
+  max-height: 70vh;
+  min-width: 200px;
+  min-height: 200px;
+  border-radius: 6px;
+}
+
+#cropper-modal .modal-buttons {
+  text-align: center;
+  margin-top: 12px;
+}
+
+#cropper-modal button {
+  margin: 0 6px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  color: white;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#cropper-apply {
+  background: #2c7;
+}
+
+#cropper-apply:hover {
+  background: #23a06d;
+}
+
+#cropper-cancel {
+  background: #aaa;
+}
+
+#cropper-cancel:hover {
+  background: #888;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
 }

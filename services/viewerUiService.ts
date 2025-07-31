@@ -1,8 +1,8 @@
 import fs from 'fs';
 import { resolveFromRoot } from '../utils/file-utils';
-import { GistRecipe } from './gistService';
+import { RecipeRecord } from './storageService';
 
-export function renderViewerHtml(recipes: GistRecipe[]): string {
+export function renderViewerHtml(recipes: RecipeRecord[]): string {
   const template = fs.readFileSync(resolveFromRoot('public', 'viewer.html'), 'utf8');
 
   // Sort recipes by date (newest first)
@@ -21,12 +21,23 @@ export function renderViewerHtml(recipes: GistRecipe[]): string {
     .filter((r) => r.name || r.description || r.tiblsUrl || r.rawJsonUrl || r.ogImageUrl)
     .map(
       (r, idx) => `
-        <div class="recipe-card" id="recipe-${idx}">
-          <div class="recipe-field">${
-            r.ogImageUrl
-              ? `<img class="thumbnail" src="${r.ogImageUrl}" alt="${r.name} image" />`
-              : ''
-          }</div>
+        <div class="recipe-card" id="recipe-${idx}" data-filename="${r.filename}">
+          <div class="recipe-field">
+            <div class="image-wrapper">
+              <div class="image-container">
+                ${
+                  r.ogImageUrl
+                    ? `<img class="thumbnail" src="${r.ogImageUrl}" alt="${r.name} image" />`
+                    : `<img class="thumbnail default-img" src="/img/default-image.jpg" alt="Default recipe image" />`
+                }
+                <button class="edit-button" aria-label="Edit">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 24 24">
+                    <path d="M3 17.25V21h3.75l11.06-11.06-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41L18.37 3.29a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
           <div class="recipe-field"><span class="label">Recipe Name</span>${r.name}</div>
           ${r.description ? `<div class="recipe-field"><span class="label">Summary</span>${r.description}</div>` : ''}
           <div class="recipe-field"><span class="label">Date</span>${r.date || 'Unknown'}</div>

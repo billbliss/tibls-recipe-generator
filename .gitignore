@@ -50,7 +50,6 @@ Thumbs.db
 # Node modules
 node_modules/
 .nyc_output/
-coverage/
 
 # TypeScript output
 dist/
@@ -86,9 +85,10 @@ ngrok.yml
 tmp/
 *.tmp
 
-# Test data
+# Test data and artifacts
 debug/
 testrun.txt
+coverage/
 
 # OS-specific
 .DS_Store

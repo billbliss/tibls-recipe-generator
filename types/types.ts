@@ -1,10 +1,9 @@
 export enum ResponseMode {
   JSON = 'json',
-  VIEWER = 'viewer',
-  INGREDIENTS_ONLY = 'ingredients_only'
+  VIEWER = 'viewer'
 }
 
-export interface TiblsJson {
+export interface TiblsRecipeEnvelope {
   '@type': 'application/tibls+json';
   itemListElement: Array<{
     '@type': 'https://tibls.app/types/recipe';
@@ -32,6 +31,8 @@ export interface TiblsJson {
   }>;
   [key: string]: any;
 }
+
+export type TiblsRecipe = TiblsRecipeEnvelope['itemListElement'][number];
 
 export enum WebhookInput {
   PDF,

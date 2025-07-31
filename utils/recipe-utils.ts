@@ -64,3 +64,30 @@ export function isLikelyRecipeText(text: string): boolean {
   const hasFoodKeyword = FOOD_KEYWORDS_REGEX.test(text);
   return hasEnoughWords && hasFoodKeyword;
 }
+
+// Validates if the input is a valid Tibls JSON object or string.
+// A relatively simple check that doesn't require deep validation.
+export function isValidTiblsJson(input: unknown, multiple?: boolean): boolean {
+  try {
+    const obj = typeof input === 'string' ? JSON.parse(input) : input;
+    const allowMultiple = multiple ?? false;
+    if (
+      typeof obj !== 'object' ||
+      obj === null ||
+      obj['@type'] !== 'application/tibls+json' ||
+      !Array.isArray(obj.itemListElement) ||
+      obj.itemListElement.length === 0
+    ) {
+      return false;
+    }
+
+    if (!allowMultiple && obj.itemListElement.length > 1) {
+      return false;
+    }
+
+    const recipe = obj.itemListElement[0];
+    return typeof recipe === 'object' && recipe['@type'] === 'https://tibls.app/types/recipe';
+  } catch {
+    return false;
+  }
+}

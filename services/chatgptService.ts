@@ -4,8 +4,7 @@ import path from 'path';
 import { createLogger } from '../utils/core-utils';
 import { resolveFromRoot, generateRecipeFilename } from '../utils/file-utils';
 import { applyPerServingCaloriesOverride, enforcePerServingCalories } from '../utils/recipe-utils';
-import { ResponseMode, RecipeFocusMode } from '../types/types';
-import { handleImageFormat } from './imageService';
+import { RecipeFocusMode, TiblsRecipeEnvelope } from '../types/types';
 import sharp from 'sharp';
 
 import tiblsSchemaJson from '../prompts/tibls-schema.json';
@@ -14,111 +13,45 @@ const tiblsPrompt = fs.readFileSync(resolveFromRoot('prompts', 'chatgpt-instruct
 
 const { log, error } = createLogger('chatgptService-log.txt');
 
-export async function processImageRecipe(
-  textInput: string,
-  responseMode: ResponseMode,
-  baseUrl: string,
-  ogImageUrl?: string,
-  imageFormat?: string,
-  images: Buffer[] = []
-): Promise<any> {
-  // Auto-rotate based on EXIF and return a buffer (want to ensure images are sent to ChatGPT right-side-up)
-  const normalizedImages = await Promise.all(
-    images.map(async (img) => {
-      return await sharp(img.buffer).rotate().toBuffer();
-    })
-  );
-
-  // Pass 1: extract ingredients only
-  const rawIngredients = await processRecipeWithChatGPT(
-    textInput,
-    ResponseMode.INGREDIENTS_ONLY,
-    baseUrl,
-    ogImageUrl,
-    imageFormat,
-    normalizedImages,
-    RecipeFocusMode.INGREDIENTS
-  );
-
-  // log(`Extracted raw ingredients from first pass:\n${rawIngredients}`);
-
-  // Embed the extracted ingredients into the second pass prompt
-  const injectedPrompt = `Here is the exact ingredient list extracted verbatim from the recipe images:
-    ${rawIngredients}
-    Do NOT alter, add, or remove any ingredients. Use this exact list when creating the Tibls JSON.
-    Now here is the full recipe text for context:
-    ${textInput}`;
-
-  // Pass 2: build the final Tibls JSON using the injected ingredients
-  const finalResult = await processRecipeWithChatGPT(
-    injectedPrompt,
-    responseMode,
-    baseUrl,
-    ogImageUrl,
-    undefined,
-    normalizedImages,
-    RecipeFocusMode.RECIPE
-  );
-
-  // ✅ Only return the final JSON, not the first-pass text
-  return finalResult;
+function injectOgImageUrlIfMissing(tiblsJson: TiblsRecipeEnvelope, ogImageUrl?: string): void {
+  if (ogImageUrl && tiblsJson?.itemListElement?.[0] && !tiblsJson.itemListElement[0].ogImageUrl) {
+    tiblsJson.itemListElement[0].ogImageUrl = ogImageUrl;
+  }
 }
 
-export async function processRecipeWithChatGPT(
-  textInput: string,
-  responseMode: ResponseMode,
-  baseUrl: string,
-  ogImageUrl?: string,
-  imageFormat?: string,
-  imageInputs?: Buffer[],
-  focusMode?: RecipeFocusMode
-): Promise<any> {
-  // Construct the array of content to be submitted to the ChatGPT API
-  const normalizedFocus = focusMode ?? RecipeFocusMode.RECIPE;
+function buildChatPayload({
+  textInput,
+  imageInputs = [],
+  dynamicPrompt,
+  focusMode
+}: {
+  textInput: string;
+  imageInputs?: Buffer[];
+  dynamicPrompt: string;
+  focusMode: RecipeFocusMode;
+}): any {
   const content: any[] = [];
 
-  // Include text input if there is any
-  if (textInput && typeof textInput === 'string') {
+  if (textInput) {
     content.push({ type: 'text', text: textInput });
   }
-  // Include images if there are any
+
   if (imageInputs && imageInputs.length > 0) {
-    for (const buf of imageInputs) {
-      const base64Image = buf.toString('base64');
+    for (const image of imageInputs) {
+      const base64Image = image.toString('base64');
       content.push({
         type: 'image_url',
-        image_url: { url: `data:image/jpeg;base64,${base64Image}` }
+        image_url: {
+          url: `data:image/jpeg;base64,${base64Image}`
+        }
       });
     }
   }
 
-  let dynamicPrompt = '';
-
-  if (normalizedFocus === RecipeFocusMode.INGREDIENTS) {
-    dynamicPrompt = `You are looking ONLY for a list of recipe ingredients.
-      Return EXACTLY the ingredients you see, each on its own line, in the same wording and order as written.
-      - Do NOT include instructions, narrative text, serving sizes, headings, or explanations.
-      - Do NOT summarize or reformat.
-      - If no ingredients are visible, return an empty string.
-      - Do NOT include any other text before or after the list.`;
-  } else {
-    // existing behavior
-    if (imageInputs?.length && textInput) {
-      dynamicPrompt = `Attached are ${imageInputs.length} image(s) of the same recipe along with text. Merge all visible and textual information into one single recipe.`;
-    } else if (imageInputs?.length) {
-      dynamicPrompt = `Attached are ${imageInputs.length} image(s) of the same recipe. Extract and combine all visible information into one single recipe.`;
-    } else {
-      dynamicPrompt = `Extract a single recipe from the provided text.`;
-    }
-  }
-
   const messages: any[] = [];
-
-  // Only include tiblsPrompt for full RECIPE mode
-  if (normalizedFocus === RecipeFocusMode.RECIPE) {
+  if (focusMode === RecipeFocusMode.RECIPE) {
     messages.push({ role: 'system', content: tiblsPrompt });
   }
-
   messages.push({ role: 'user', content: dynamicPrompt });
   messages.push({ role: 'user', content: content });
 
@@ -128,8 +61,7 @@ export async function processRecipeWithChatGPT(
     messages
   };
 
-  // Only include function tools for full RECIPE mode
-  if (responseMode !== ResponseMode.INGREDIENTS_ONLY) {
+  if (focusMode === RecipeFocusMode.RECIPE) {
     chatPayload.tools = [
       {
         type: 'function',
@@ -143,11 +75,129 @@ export async function processRecipeWithChatGPT(
     chatPayload.tool_choice = { type: 'function', function: { name: 'tiblsRecipe' } };
   }
 
+  return chatPayload;
+}
+
+async function callOpenAIChatCompletion(chatPayload: any): Promise<any> {
+  const openaiRes = await axios.post('https://api.openai.com/v1/chat/completions', chatPayload, {
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  return openaiRes;
+}
+
+async function extractIngredientsOnlyWithMetadata(
+  textInput: string,
+  imageInputs: Buffer[]
+): Promise<{ text: string; ogImageUrlCandidate?: { filename: string } }> {
+  let filenames: string[] = imageInputs.map((_, i) => `Image_${i + 1}.jpg`);
+  let dynamicPrompt = `You are ONLY extracting the list of ingredients and, optionally, a candidate image for the recipe.
+    Respond with a JSON object like this:
+    {
+      "text": "...ingredient list here...",
+      "ogImageUrlCandidate": {
+        "filename": "IMG_1234.JPG"
+      }
+    }
+    - "text" must contain ONLY the ingredients you see, each on its own line, in the exact wording and order as written.
+    - Do NOT include instructions, narrative text, serving sizes, headings, or explanations.
+    - "ogImageUrlCandidate" should name the image file that most likely shows the final dish (not a text page). If no such photo is included, omit it.
+    - Do NOT include any explanatory text or formatting.`;
+
+  if (filenames.length > 0) {
+    dynamicPrompt += `
+      Image filenames (in order of appearance):
+      ${filenames.join('\n')}
+      Use only one of these exact names for "ogImageUrlCandidate.filename" if including that field.`;
+  }
+
+  const chatPayload = buildChatPayload({
+    textInput,
+    imageInputs,
+    dynamicPrompt,
+    focusMode: RecipeFocusMode.INGREDIENTS
+  });
+
+  const openaiRes = await callOpenAIChatCompletion(chatPayload);
+
+  let raw = openaiRes.data.choices?.[0]?.message?.content?.trim();
+  if (!raw) throw new Error('No ingredients returned from OpenAI');
+
+  const fenced = raw.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fenced) raw = fenced[1].trim();
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed.text) return parsed;
+  } catch {
+    // fallback
+  }
+
+  return { text: raw };
+}
+
+export async function processImageRecipe(textInput: string, images: Buffer[] = []): Promise<any> {
+  // Auto-rotate, resize, and compress images for optimal ChatGPT input
+  const normalizedImages: Buffer[] = [];
+  const filenames: string[] = [];
+  for (let i = 0; i < images.length; i++) {
+    const resized = await sharp(images[i].buffer)
+      .rotate()
+      .resize({ width: 1024 }) // downscale to 1024px width
+      .jpeg({ quality: 80 }) // compress to reasonable size
+      .toBuffer();
+    normalizedImages.push(resized);
+    filenames.push(`Image_${i + 1}.jpg`);
+  }
+
+  // Pass 1: extract ingredients only
+  const { text: rawIngredients, ogImageUrlCandidate } = await extractIngredientsOnlyWithMetadata(
+    textInput,
+    normalizedImages
+  );
+
+  // Embed the extracted ingredients into the second pass prompt
+  const injectedPrompt = `Here is the exact ingredient list extracted verbatim from the recipe images:
+    ${rawIngredients}
+    Do NOT alter, add, or remove any ingredients. Use this exact list when creating the Tibls JSON.
+    Now here is the full recipe text for context:
+    ${textInput}`;
+
+  // Pass 2: build the final Tibls JSON using the injected ingredients
+  const finalResult = await processRecipeWithChatGPT(injectedPrompt, undefined, normalizedImages);
+
+  // Inject the selected ogImageUrlCandidate if available
+  if (ogImageUrlCandidate?.filename) {
+    const index = filenames.indexOf(ogImageUrlCandidate.filename);
+    if (index !== -1) {
+      const base64 = normalizedImages[index].toString('base64');
+      const dataUrl = `data:image/jpeg;base64,${base64}`;
+      injectOgImageUrlIfMissing(finalResult, dataUrl);
+    }
+  }
+
+  // ✅ Only return the final JSON, not the first-pass text
+  return finalResult;
+}
+
+export async function processRecipeWithChatGPT(
+  textInput: string,
+  ogImageUrl?: string,
+  imageInputs?: Buffer[]
+): Promise<TiblsRecipeEnvelope> {
+  let dynamicPrompt = `Extract a single recipe from the provided text.`;
+
+  const chatPayload = buildChatPayload({
+    textInput,
+    imageInputs,
+    dynamicPrompt,
+    focusMode: RecipeFocusMode.RECIPE
+  });
+
   // Validate required keys
   if (!process.env.OPENAI_API_KEY) throw new Error('Missing OpenAI API key');
-  if (responseMode === ResponseMode.VIEWER && (!process.env.GITHUB_TOKEN || !process.env.GIST_ID)) {
-    throw new Error('Missing GitHub token or Gist ID for viewer mode');
-  }
 
   // Optional debug payload save
   if (process.env.GENERATE_CHATGPT_DEBUG_DATA === 'true') {
@@ -162,20 +212,7 @@ export async function processRecipeWithChatGPT(
     }
   }
 
-  // Call OpenAI API
-  const openaiRes = await axios.post('https://api.openai.com/v1/chat/completions', chatPayload, {
-    headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      'Content-Type': 'application/json'
-    }
-  });
-
-  // If we're just extracting ingredients, return the raw text content
-  if (responseMode === ResponseMode.INGREDIENTS_ONLY) {
-    const rawIngredients = openaiRes.data.choices?.[0]?.message?.content?.trim();
-    if (!rawIngredients) throw new Error('No ingredients returned from OpenAI');
-    return rawIngredients;
-  }
+  const openaiRes = await callOpenAIChatCompletion(chatPayload);
 
   const toolCall = openaiRes.data.choices?.[0]?.message?.tool_calls?.[0];
   const argsString = toolCall?.function?.arguments;
@@ -183,10 +220,11 @@ export async function processRecipeWithChatGPT(
 
   const tiblsJson = JSON.parse(argsString);
 
-  // Inject ogImageUrl if provided
-  if (ogImageUrl && tiblsJson?.itemListElement?.[0] && !tiblsJson.itemListElement[0].ogImageUrl) {
-    tiblsJson.itemListElement[0].ogImageUrl = ogImageUrl;
-  }
+  // Defer injection of large base64 URLs until after GPT returns, to avoid token bloat
+  const isBase64Image = typeof ogImageUrl === 'string' && ogImageUrl.startsWith('data:image/');
+  const deferredOgImageUrl = isBase64Image ? ogImageUrl : undefined;
+
+  injectOgImageUrlIfMissing(tiblsJson, deferredOgImageUrl || ogImageUrl);
 
   // ✅ Always ensure at least one element exists, but don’t force ogImageUrl=null
   if (!tiblsJson.itemListElement || tiblsJson.itemListElement.length === 0) {
@@ -222,37 +260,6 @@ export async function processRecipeWithChatGPT(
   }
 
   // Format ogImageUrl if needed
-  await handleImageFormat(tiblsJson, imageFormat || 'url');
 
-  // Handle response modes
-  if (responseMode === ResponseMode.JSON) {
-    return tiblsJson;
-  }
-
-  if (responseMode === ResponseMode.VIEWER) {
-    // In test mode, skip saving to GitHub
-    if (process.env.NODE_ENV === 'test') {
-      console.log('[TEST MODE] Skipping GitHub Gist save');
-      return { status: 'queued', viewer: `${baseUrl}/gist/fake-gist` };
-    }
-
-    const filename = `${generateRecipeFilename(tiblsJson)}.json`;
-    const gistId = process.env.GIST_ID;
-    const gistPayload = {
-      files: { [filename]: { content: JSON.stringify(tiblsJson, null, 2) } }
-    };
-
-    await axios.patch(`https://api.github.com/gists/${gistId}`, gistPayload, {
-      headers: {
-        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-        Accept: 'application/vnd.github+json',
-        'User-Agent': 'Tibls-Webhook-Handler'
-      }
-    });
-
-    const viewerUrl = `${baseUrl}/gist/${gistId}`;
-    return { status: 'queued', viewer: viewerUrl };
-  }
-
-  throw new Error(`Unsupported responseMode: ${responseMode}`);
+  return tiblsJson;
 }

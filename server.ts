@@ -1,11 +1,12 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
-import axios from 'axios';
+dotenv.config();
+
 import bodyParser from 'body-parser';
 import multer from 'multer';
 
 import { createLogger } from './utils/core-utils';
-const { error, close } = createLogger('server-log.txt');
+const { log, error, close } = createLogger('server-log.txt');
 
 import { getBaseUrl, isUrl, fetchImageAsBase64DataUrl } from './utils/core-utils';
 
@@ -15,12 +16,10 @@ import { resolveFromRoot, saveImageToPublicDir } from './utils/file-utils';
 import { handlePdfFile } from './services/pdfService';
 import { handleUrl } from './services/urlService';
 import { processRecipeWithChatGPT, processImageRecipe } from './services/chatgptService';
-import { fetchGistRecipes } from './services/gistService';
+import { loadRecipe, loadAllRecipes, saveRecipe, getCurrentDbId } from './services/storageService';
 import { renderViewerHtml } from './services/viewerUiService';
 
-import { WebhookInput, ResponseMode } from './types/types';
-
-dotenv.config();
+import { WebhookInput, ResponseMode, TiblsRecipe } from './types/types';
 
 export const app = express(); // Exported for integration tests
 const port = process.env.PORT || 3000;
@@ -71,8 +70,6 @@ app.post(
 // - `input`: a URL or text input for the recipe
 // - `filename`: an optional filename for an uploaded image or PDF
 // - `responseMode`: controls the response behavior (VIEWER or JSON)
-// - `imageFormat`: optional, values are ['url', 'base64', 'tempImageBase64'} - specifies the image format for ogImageUrl
-//    default value comes from process.env.DEFAULT_IMAGE_FORMAT; if that's not present, it defaults to 'url'.
 // It expects a JSON body with an `input` field for a URL; the filename and filetype are used for images/PDFs
 // It uses OpenAI's API to process the input and generate a Tibls JSON object.
 // responseMode controls the response behavior:
@@ -80,12 +77,22 @@ app.post(
 // - JSON: returns the raw Tibls JSON object
 app.post('/webhook', upload.array('filename'), async (req: Request, res: Response) => {
   let input = req.body.input;
-  const files = (req.files as Express.Multer.File[]) || [];
+  const files: Express.Multer.File[] = Array.isArray(req.files) ? req.files : [];
   const firstFile = files.length > 0 ? files[0] : undefined;
   const responseMode: ResponseMode = (req.body.responseMode as ResponseMode) || ResponseMode.VIEWER;
-  const imageFormat = req.body.imageFormat || process.env.DEFAULT_IMAGE_FORMAT || 'url';
   let webhookInput: WebhookInput = WebhookInput.INVALID;
 
+  // Early rejection of unsupported file types (if a file is uploaded)
+  if (firstFile && !['application/pdf', 'image/png', 'image/jpeg'].includes(firstFile.mimetype)) {
+    res.status(415).json({ error: `Unsupported file type: ${firstFile.mimetype}` });
+    return;
+  }
+
+  // Validate responseMode
+  if (![ResponseMode.VIEWER, ResponseMode.JSON].includes(responseMode)) {
+    res.status(400).json({ error: `Unsupported responseMode: ${responseMode}` });
+    return;
+  }
   // Determine what's being input to the webhook
   if (!input && firstFile && firstFile.mimetype === 'application/pdf') {
     webhookInput = WebhookInput.PDF;
@@ -138,6 +145,18 @@ app.post('/webhook', upload.array('filename'), async (req: Request, res: Respons
       }
       break;
     case WebhookInput.TEXT:
+      // Reject if input is provided but accompanied by any file that's not a single image
+      if (
+        typeof input === 'string' &&
+        input.trim() !== '' &&
+        files.length > 0 &&
+        !(files.length === 1 && files[0].mimetype.startsWith('image/'))
+      ) {
+        res.status(500).json({
+          error: 'If text input is submitted, only a single image file can be submitted with it.'
+        });
+        return;
+      }
       // No additional processing needed; input is set (by definition) and ogImageUrl stays as provided (or undefined)
       break;
     case WebhookInput.INVALID:
@@ -157,27 +176,19 @@ app.post('/webhook', upload.array('filename'), async (req: Request, res: Respons
   const baseUrl = getBaseUrl(req);
 
   try {
-    let result: any;
+    let tiblsJson: any;
     if (webhookInput === WebhookInput.IMAGE) {
       const imageBuffers = files.map((f) => f.buffer);
-      result = await processImageRecipe(
-        input,
-        responseMode,
-        baseUrl,
-        req.body.ogImageUrl,
-        imageFormat,
-        imageBuffers
-      );
+      tiblsJson = await processImageRecipe(input, imageBuffers);
     } else {
-      result = await processRecipeWithChatGPT(
-        input,
-        responseMode,
-        baseUrl,
-        req.body.ogImageUrl,
-        imageFormat
-      );
+      tiblsJson = await processRecipeWithChatGPT(input, req.body.ogImageUrl);
     }
-    res.json(result);
+    if (responseMode === ResponseMode.VIEWER) {
+      const filename = await saveRecipe(getCurrentDbId(), tiblsJson, baseUrl);
+      res.json({ status: 'queued', viewer: `${baseUrl}/gist/${filename}` });
+    } else if (responseMode === ResponseMode.JSON) {
+      res.json(tiblsJson);
+    }
   } catch (err: any) {
     error('Error:', err);
     res.status(500).json({ error: err.message });
@@ -188,28 +199,16 @@ app.post('/webhook', upload.array('filename'), async (req: Request, res: Respons
 // It fetches the Gist content and returns the requested file's content
 app.get('/gist-file/:filename', async (req: Request, res: Response) => {
   const filename = req.params.filename;
-  const gistId = process.env.GIST_ID;
 
   try {
-    const response = await axios.get(`https://api.github.com/gists/${gistId}`, {
-      headers: {
-        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-        Accept: 'application/vnd.github+json'
-      }
-    });
-
-    const file = response.data.files[filename];
-    if (!file) {
-      // if you try to combine the following two lines, it will not work.
-      //   return res.status(404).send("File not found");
-      // causes a Typescrpt error in the app.get( line above
-      // because it thinks it's returning a Response object, not a Promise object.
+    const fileContent = await loadRecipe(getCurrentDbId(), filename);
+    if (!fileContent) {
       res.status(404).send('File not found');
       return;
     }
 
     res.setHeader('Content-Type', 'application/json');
-    res.send(file.content);
+    res.send(fileContent);
   } catch (err) {
     error('Error fetching Gist file:', err);
     res.status(500).send('Failed to retrieve file');
@@ -217,22 +216,65 @@ app.get('/gist-file/:filename', async (req: Request, res: Response) => {
 });
 
 app.get(['/', '/gist/:gistId'], async (req, res) => {
-  const gistId = req.params.gistId || process.env.GIST_ID;
   const baseUrl = getBaseUrl(req);
 
-  // Ensure that gistId is defined and non-empty
-  if (!gistId) {
-    res.status(500).send('Missing Gist ID configuration.');
-    return;
-  }
-
   try {
-    const recipes = await fetchGistRecipes(gistId, baseUrl);
+    const recipes = await loadAllRecipes(getCurrentDbId(), baseUrl);
     const html = renderViewerHtml(recipes);
     res.send(html);
   } catch (err) {
     error('Error fetching Gist:', err);
     res.status(500).send('Error loading recipe viewer.');
+  }
+});
+
+// Saves edited Tibls JSON to Gist
+app.post('/update-recipe-image', async (req: Request, res: Response) => {
+  console.log('Received update-recipe-image request:', req.body);
+  const filename = req.body.filename;
+  if (!filename) {
+    res.status(400).json({
+      success: false,
+      error: 'The filename for the recipe you are trying to save is required.'
+    });
+    return;
+  }
+
+  const updatedOgImageUrl = req.body.ogImageUrl;
+  if (!updatedOgImageUrl) {
+    res.status(400).json({
+      success: false,
+      error: 'The new ogImageUrl is required.'
+    });
+    return;
+  }
+
+  try {
+    // Fetch the original recipe JSON from the gist using loadRecipe
+    const originalJson = await loadRecipe(getCurrentDbId(), filename);
+    if (!originalJson) {
+      res.status(404).json({
+        success: false,
+        error: `Original recipe file "${filename}" not found in Gist.`
+      });
+      return;
+    }
+
+    const updatedJson = {
+      ...originalJson,
+      itemListElement: originalJson.itemListElement.map((item: TiblsRecipe, index: number) =>
+        index === 0 ? { ...item, ogImageUrl: req.body.ogImageUrl } : item
+      )
+    };
+
+    const updatedFilename = await saveRecipe(getCurrentDbId(), updatedJson, filename);
+    res.json({ success: true, filename: `${updatedFilename}` });
+  } catch (err: any) {
+    if (err.message?.includes('Invalid Tibls JSON format')) {
+      res.status(422).send({ error: err.message });
+    } else {
+      res.status(500).send({ error: 'Internal server error' });
+    }
   }
 });
 
@@ -262,21 +304,21 @@ app.get(
 if (process.env.NODE_ENV !== 'test') {
   // Ensure test scripts don't start another instance
   app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
+    log(`Server is running on port ${port}`);
   });
 }
 
 // More graceful shutdown handling
 process.on('SIGTERM', () => {
   if (process.env.NODE_ENV !== 'test') {
-    console.log('Received SIGTERM, shutting down...');
+    log('Received SIGTERM, shutting down...');
     close(); // Close the logger stream
   }
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
-  console.log('Received SIGINT (Ctrl+C), shutting down...');
+  log('Received SIGINT (Ctrl+C), shutting down...');
   close(); // flush and close the log file
   process.exit(0);
 });

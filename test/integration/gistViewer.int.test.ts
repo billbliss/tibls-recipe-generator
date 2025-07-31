@@ -12,8 +12,10 @@ describe('GET /gist/:gistId viewer', () => {
     const mockGistFiles = {
       'ValidRecipe-01-Jan-2024.json': {
         content: JSON.stringify({
+          '@type': 'application/tibls+json',
           itemListElement: [
             {
+              '@type': 'https://tibls.app/types/recipe',
               name: 'Valid Recipe',
               summary: 'A test summary',
               ogImageUrl: 'http://example.com/image.jpg',

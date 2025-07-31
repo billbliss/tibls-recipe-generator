@@ -1,32 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { processRecipeWithChatGPT, processImageRecipe } from '../chatgptService';
-import * as imageService from '../imageService';
 import axios from 'axios';
 
-// Mock axios and handleImageFormat
+// Mock axios
 vi.mock('axios');
-vi.mock('../imageService', () => ({
-  handleImageFormat: vi.fn().mockResolvedValue(undefined)
-}));
 vi.mock('sharp', () => {
   return {
     default: () => ({
       rotate: () => ({
-        toBuffer: async () => Buffer.from('mock-image-buffer')
+        resize: () => ({
+          jpeg: () => ({
+            toBuffer: async () => Buffer.from('mock-image-buffer')
+          })
+        })
       })
     })
   };
 });
 
 describe('processRecipeWithChatGPT', () => {
-  const baseUrl = 'http://localhost:3000';
   const fakeToolArgs = {
     itemListElement: [
       {
         name: 'Test Recipe',
         servings: 4,
         ingredients: [],
-        steps: []
+        steps: [],
+        ogImageUrl: ''
       }
     ]
   };
@@ -38,7 +38,7 @@ describe('processRecipeWithChatGPT', () => {
     process.env.GIST_ID = 'fake-gist';
   });
 
-  it('returns parsed Tibls JSON for ResponseMode.JSON', async () => {
+  it('returns parsed Tibls JSON', async () => {
     // Mock OpenAI response
     (axios.post as any).mockResolvedValue({
       data: {
@@ -53,17 +53,11 @@ describe('processRecipeWithChatGPT', () => {
     });
 
     const result = await processRecipeWithChatGPT(
-      'Some valid recipe text with 300 kcal per serving',
-      'json' as any,
-      baseUrl,
-      undefined,
-      'url',
-      []
+      'Some valid recipe text with 300 kcal per serving'
     );
 
     expect(result.itemListElement[0].name).toBe('Test Recipe');
     expect(result.itemListElement[0].servings).toBe(4);
-    expect(imageService.handleImageFormat).toHaveBeenCalled();
   });
 
   it('injects ogImageUrl if provided', async () => {
@@ -79,45 +73,29 @@ describe('processRecipeWithChatGPT', () => {
       }
     });
 
-    const result = await processRecipeWithChatGPT(
-      'Some recipe',
-      'json' as any,
-      baseUrl,
-      'http://example.com/image.jpg',
-      'url',
-      []
-    );
+    const result = await processRecipeWithChatGPT('Some recipe', 'http://example.com/image.jpg');
 
     expect(result.itemListElement[0].ogImageUrl).toBe('http://example.com/image.jpg');
   });
 
-  it('returns queued viewer URL for ResponseMode.VIEWER', async () => {
-    (axios.post as any).mockResolvedValue({
-      data: {
-        choices: [
-          {
-            message: {
-              tool_calls: [{ function: { arguments: JSON.stringify(fakeToolArgs) } }]
+  describe('base64 image injection', () => {
+    it('injects ogImageUrl if a base64 image URL is provided', async () => {
+      const base64Url = 'data:image/jpeg;base64,aGVsbG8=';
+      (axios.post as any).mockResolvedValue({
+        data: {
+          choices: [
+            {
+              message: {
+                tool_calls: [{ function: { arguments: JSON.stringify(fakeToolArgs) } }]
+              }
             }
-          }
-        ]
-      }
+          ]
+        }
+      });
+
+      const result = await processRecipeWithChatGPT('Recipe with image', base64Url);
+      expect(result.itemListElement[0].ogImageUrl).toBe(base64Url);
     });
-
-    // Mock axios.patch for Gist
-    (axios.patch as any).mockResolvedValue({ data: {} });
-
-    const result = await processRecipeWithChatGPT(
-      'Viewer mode recipe text',
-      'viewer' as any,
-      baseUrl,
-      undefined,
-      'url',
-      []
-    );
-
-    expect(result.status).toBe('queued');
-    expect(result.viewer).toContain('/gist/fake-gist');
   });
 
   it('throws an error if OpenAI returns no tool call arguments', async () => {
@@ -133,34 +111,16 @@ describe('processRecipeWithChatGPT', () => {
       }
     });
 
-    await expect(
-      processRecipeWithChatGPT('Bad data', 'json' as any, baseUrl, undefined, undefined, [])
-    ).rejects.toThrow('No tool call arguments returned from OpenAI');
-  });
-
-  it('throws error for unsupported responseMode', async () => {
-    (axios.post as any).mockResolvedValue({
-      data: {
-        choices: [
-          {
-            message: {
-              tool_calls: [{ function: { arguments: JSON.stringify(fakeToolArgs) } }]
-            }
-          }
-        ]
-      }
-    });
-
-    await expect(
-      processRecipeWithChatGPT('some text', 'bogus' as any, baseUrl, undefined, undefined, [])
-    ).rejects.toThrow('Unsupported responseMode');
+    await expect(processRecipeWithChatGPT('Bad data')).rejects.toThrow(
+      'No tool call arguments returned from OpenAI'
+    );
   });
 });
 
 /**
  * processImageRecipe makes TWO sequential GPT calls for IMAGE input:
- *  1. INGREDIENTS_ONLY pass -> plain text list of ingredients
- *  2. RECIPE pass -> full Tibls JSON using the extracted ingredients
+ *  1. Ingredient extraction pass -> plain text list of ingredients
+ *  2. Full recipe generation pass -> Tibls JSON using the extracted ingredients
  *
  * To test this correctly:
  *  - axios.post must be mocked TWICE using chained .mockResolvedValueOnce calls
@@ -173,13 +133,12 @@ describe('processRecipeWithChatGPT', () => {
  * Any mismatch or forgotten reset can cause later tests to see stale mock data.
  */
 describe('processImageRecipe', () => {
-  const baseUrl = 'http://localhost:3000';
   beforeEach(() => {
     vi.resetAllMocks();
   });
 
-  it('performs two GPT calls (INGREDIENTS_ONLY then RECIPE) and returns Tibls JSON', async () => {
-    // Mock first GPT call (INGREDIENTS_ONLY) to return a plain ingredient list
+  it('performs two GPT calls (ingredients only and then full recipe) and returns Tibls JSON', async () => {
+    // Mock first GPT call to return a plain ingredient list
     (axios.post as any)
       .mockResolvedValueOnce({
         data: {
@@ -227,21 +186,14 @@ describe('processImageRecipe', () => {
 
     const imageBuffers = [Buffer.from('fake-image-data')];
 
-    const result = await processImageRecipe(
-      '',
-      'json' as any,
-      baseUrl,
-      undefined,
-      'image',
-      imageBuffers
-    );
+    const result = await processImageRecipe('', imageBuffers);
 
     expect(result.itemListElement[0].name).toBe('Two-Pass Image Recipe');
     expect(result.itemListElement[0].ingredients.length).toBe(2);
     expect(result.itemListElement[0].steps.length).toBe(2);
   });
 
-  it('continues to second GPT call even if first pass (INGREDIENTS_ONLY) returns empty', async () => {
+  it('continues to second GPT call even if first pass (ingredients only) returns empty', async () => {
     // First GPT call returns empty
     (axios.post as any)
       .mockResolvedValueOnce({
@@ -284,11 +236,9 @@ describe('processImageRecipe', () => {
         }
       });
 
-    await expect(
-      processImageRecipe('', 'json' as any, baseUrl, undefined, 'image', [
-        Buffer.from('fake-image-data')
-      ])
-    ).rejects.toThrow('No ingredients returned from OpenAI');
+    await expect(processImageRecipe('', [Buffer.from('fake-image-data')])).rejects.toThrow(
+      'No ingredients returned from OpenAI'
+    );
   });
 
   it('throws an error if second GPT call returns malformed JSON', async () => {
@@ -324,11 +274,7 @@ describe('processImageRecipe', () => {
         }
       });
 
-    await expect(
-      processImageRecipe('', 'json' as any, baseUrl, undefined, 'image', [
-        Buffer.from('fake-image-data')
-      ])
-    ).rejects.toThrow();
+    await expect(processImageRecipe('', [Buffer.from('fake-image-data')])).rejects.toThrow();
   });
 
   it('concatenates OCR text from multiple image buffers before GPT calls', async () => {
@@ -377,14 +323,7 @@ describe('processImageRecipe', () => {
 
     const imageBuffers = [Buffer.from('fake-image-1'), Buffer.from('fake-image-2')];
 
-    const result = await processImageRecipe(
-      '',
-      'json' as any,
-      baseUrl,
-      undefined,
-      'image',
-      imageBuffers
-    );
+    const result = await processImageRecipe('', imageBuffers);
 
     expect(result.itemListElement[0].name).toBe('Multi-Image Recipe');
     expect(result.itemListElement[0].ingredients.length).toBe(2);
