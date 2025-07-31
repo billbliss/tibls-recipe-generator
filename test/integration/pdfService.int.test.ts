@@ -34,7 +34,8 @@ beforeEach(() => {
                         name: 'Mock PDF Recipe',
                         servings: 2,
                         ingredients: [],
-                        steps: []
+                        steps: [],
+                        ogImageUrl: 'data:image/png;base64,FAKE_IMAGE_DATA'
                       }
                     ]
                   })
