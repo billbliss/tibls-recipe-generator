@@ -91,27 +91,15 @@ async function callOpenAIChatCompletion(chatPayload: any): Promise<any> {
 async function extractIngredientsOnlyWithMetadata(
   textInput: string,
   imageInputs: Buffer[]
-): Promise<{ text: string; ogImageUrlCandidate?: { filename: string } }> {
-  let filenames: string[] = imageInputs.map((_, i) => `Image_${i + 1}.jpg`);
-  let dynamicPrompt = `You are ONLY extracting the list of ingredients and, optionally, a candidate image for the recipe.
+): Promise<{ text: string }> {
+  let dynamicPrompt = `You are ONLY extracting the list of ingredients.
     Respond with a JSON object like this:
     {
-      "text": "...ingredient list here...",
-      "ogImageUrlCandidate": {
-        "filename": "IMG_1234.JPG"
-      }
+      "text": "...ingredient list here..."
     }
     - "text" must contain ONLY the ingredients you see, each on its own line, in the exact wording and order as written.
     - Do NOT include instructions, narrative text, serving sizes, headings, or explanations.
-    - "ogImageUrlCandidate" should name the image file that most likely shows the final dish (not a text page). If no such photo is included, omit it.
     - Do NOT include any explanatory text or formatting.`;
-
-  if (filenames.length > 0) {
-    dynamicPrompt += `
-      Image filenames (in order of appearance):
-      ${filenames.join('\n')}
-      Use only one of these exact names for "ogImageUrlCandidate.filename" if including that field.`;
-  }
 
   const chatPayload = buildChatPayload({
     textInput,
@@ -141,7 +129,6 @@ async function extractIngredientsOnlyWithMetadata(
 export async function processImageRecipe(textInput: string, images: Buffer[] = []): Promise<any> {
   // Auto-rotate, resize, and compress images for optimal ChatGPT input
   const normalizedImages: Buffer[] = [];
-  const filenames: string[] = [];
   for (let i = 0; i < images.length; i++) {
     const resized = await sharp(images[i].buffer)
       .rotate()
@@ -149,11 +136,10 @@ export async function processImageRecipe(textInput: string, images: Buffer[] = [
       .jpeg({ quality: 80 }) // compress to reasonable size
       .toBuffer();
     normalizedImages.push(resized);
-    filenames.push(`Image_${i + 1}.jpg`);
   }
 
   // Pass 1: extract ingredients only
-  const { text: rawIngredients, ogImageUrlCandidate } = await extractIngredientsOnlyWithMetadata(
+  const { text: rawIngredients } = await extractIngredientsOnlyWithMetadata(
     textInput,
     normalizedImages
   );
@@ -167,16 +153,6 @@ export async function processImageRecipe(textInput: string, images: Buffer[] = [
 
   // Pass 2: build the final Tibls JSON using the injected ingredients
   const finalResult = await processRecipeWithChatGPT(injectedPrompt, undefined, normalizedImages);
-
-  // Inject the selected ogImageUrlCandidate if available
-  if (ogImageUrlCandidate?.filename) {
-    const index = filenames.indexOf(ogImageUrlCandidate.filename);
-    if (index !== -1) {
-      const base64 = normalizedImages[index].toString('base64');
-      const dataUrl = `data:image/jpeg;base64,${base64}`;
-      injectOgImageUrlIfMissing(finalResult, dataUrl);
-    }
-  }
 
   // ✅ Only return the final JSON, not the first-pass text
   return finalResult;

@@ -80,8 +80,6 @@ This step ensures the image metadata is reliable and prevents hallucinated value
 - Even if the text or images appear to contain multiple recipes, ALWAYS merge them into ONE recipe. NEVER include more than one recipe object in `itemListElement[]`.
 - Identify and segment: title, ingredients, instructions, time values, servings, and metadata.
 - When detecting ingredients in images or PDFs, prioritize clearly structured lists, columns, or bulleted blocks over narrative paragraphs. Treat any visually separated ingredient list as authoritative and extract all items exactly as they appear, with correct quantities and units. Only pull ingredients from narrative text if they are unique and not listed elsewhere.
-- Use the clearest or most representative photo of the finished dish as `ogImageUrl` if present. If multiple images are provided, prioritize the primary dish photo over ingredient lists or text. Always encode the selected photo as a Base64 data URI (`data:image/jpeg;base64,...`) and include it directly as the value of `ogImageUrl`. Do NOT leave it as a filename or relative path.
-- If no clear dish image is found, omit `ogImageUrl` entirely and add a note in `notes[]` stating that no suitable image was detected.
 - Always generate a `summary` (based on visible context or inferred tone) and include it.
 - Note any OCR ambiguity, handwritten notes, or extra metadata in `notes[]`.
 - Do not populate `urlHost` and `urlSource` because these recipes did not come from a URL.

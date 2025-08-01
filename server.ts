@@ -184,7 +184,7 @@ app.post('/webhook', upload.array('filename'), async (req: Request, res: Respons
       tiblsJson = await processRecipeWithChatGPT(input, req.body.ogImageUrl);
     }
     if (responseMode === ResponseMode.VIEWER) {
-      const filename = await saveRecipe(getCurrentDbId(), tiblsJson, baseUrl);
+      const filename = await saveRecipe(getCurrentDbId(), tiblsJson);
       res.json({ status: 'queued', viewer: `${baseUrl}/gist/${filename}` });
     } else if (responseMode === ResponseMode.JSON) {
       res.json(tiblsJson);
