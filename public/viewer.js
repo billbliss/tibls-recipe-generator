@@ -201,7 +201,7 @@ document.querySelectorAll('.edit-button').forEach(button => {
       const recipeFilename = recipeCard.getAttribute("data-filename");
 
       try {
-        const result = await fetch("/save-recipe-image", {
+        const result = await fetch("/update-recipe-image", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
