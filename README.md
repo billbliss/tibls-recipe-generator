@@ -29,6 +29,7 @@ It also implements a viewer UI that displays the contents of all the converted r
 - Node.js version 22
 - TypeScript
 - Express.js
+- Cloudflare R2 storage (S3 compatible)
 - ImageMagick (`convert`) and Ghostscript for PDF-to-image conversion
 - Google Cloud Vision API for OCR
 - multer and other supporting packages
@@ -56,6 +57,9 @@ npm start
 
 # Run automated tests (unit and integration tests)
 npm test
+
+# Generate code coverage reports
+npm run coverage
 ```
 
 ### Linting
@@ -75,37 +79,7 @@ To autocorrect common issues like spacing or missing semicolons.
 
 ## 🔧 Environment Variables
 
-Set runtime behavior and external integrations using these variables. Some are required for OCR or API access.
-
-Use .env or hardcoded configs to set secrets, logging, or Gist target details if needed.
-
-Here's a sample .env file with sensitive information redacted:
-
-```bash
-# Port for local development; Render uses 10000 by default
-PORT=3000
-
-# OpenAI API key for recipe analysis
-OPENAI_API_KEY=sk-proj-xxxxxx
-
-# GitHub token and Gist details for saving results
-GITHUB_TOKEN=xxxxxx
-GIST_PATH=https://gist.github.com/USERNAME/
-GIST_ID=xxxxx
-
-# Optional: generate random test data for dev use
-GENERATE_CHATGPT_DEBUG_DATA=false
-
-# Required for PDF OCR: base64 version of Google Cloud Vision credentials
-# To create: base64 credentials.json > credentials.base64
-GOOGLE_CLOUD_CREDENTIALS_BASE64_FILE=../config/credentials.base64
-
-# Controls whether ChatGPT is called live in integration tests
-# If false, these tests are skipped to save time and tokens
-RUN_LIVE_CHATGPT=true```
-```
-
-Also see the .env.example file in the repo.
+See the [`.env.example`](./.env.example) file for all environment variables.
 
 ## Client Scriptable Scripts
 

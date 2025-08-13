@@ -35,7 +35,7 @@ describe('processRecipeWithChatGPT', () => {
     vi.resetAllMocks();
     process.env.OPENAI_API_KEY = 'fake-key';
     process.env.GITHUB_TOKEN = 'fake-gh-token';
-    process.env.GIST_ID = 'fake-gist';
+    process.env.DEFAULT_GIST_ID = 'fake-gist';
   });
 
   it('returns parsed Tibls JSON', async () => {

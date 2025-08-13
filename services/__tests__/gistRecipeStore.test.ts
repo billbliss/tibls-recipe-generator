@@ -1,15 +1,16 @@
-import { loadRecipe } from '../storageService';
+import { GistRecipeStore } from '../gistRecipeStore';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import axios from 'axios';
-import { loadAllRecipes } from '../storageService';
 
 vi.mock('axios');
 
 describe('loadAllRecipes', () => {
   const baseUrl = 'http://localhost:3000';
+  let store: GistRecipeStore;
 
   beforeEach(() => {
     vi.resetAllMocks();
+    store = new GistRecipeStore('fake-gist-id');
   });
 
   it('parses valid recipe JSON files correctly', async () => {
@@ -39,7 +40,7 @@ describe('loadAllRecipes', () => {
 
     (axios.get as any).mockResolvedValue(mockRecipeResponse);
 
-    const recipes = await loadAllRecipes('fake-gist-id', baseUrl);
+    const recipes = await store.loadAllRecipes(baseUrl);
 
     expect(recipes).toHaveLength(1);
     expect(recipes[0].name).toBe('Mock Recipe');
@@ -47,7 +48,7 @@ describe('loadAllRecipes', () => {
     expect(recipes[0].ogImageUrl).toBe('http://example.com/image.jpg');
     expect(recipes[0].date).toBe('01-Jan-2024'); // from filename
     expect(recipes[0].tiblsUrl).toContain('tibls://tibls.app/import');
-    expect(recipes[0].rawJsonUrl).toBe(`${baseUrl}/gist-file/Recipe-01-Jan-2024.json`);
+    expect(recipes[0].rawJsonUrl).toBe(`${baseUrl}/recipe-file/Recipe-01-Jan-2024.json`);
   });
 
   it('handles invalid JSON gracefully', async () => {
@@ -63,14 +64,17 @@ describe('loadAllRecipes', () => {
 
     (axios.get as any).mockResolvedValue(mockRecipeResponse);
 
-    const recipes = await loadAllRecipes('fake-gist-id', baseUrl);
+    const recipes = await store.loadAllRecipes(baseUrl);
     expect(recipes).toHaveLength(0);
   });
 });
 
 describe('loadRecipe', () => {
+  let store: GistRecipeStore;
+
   beforeEach(() => {
     vi.resetAllMocks();
+    store = new GistRecipeStore('fake-gist-id');
   });
 
   it('parses a valid single recipe JSON', async () => {
@@ -96,7 +100,7 @@ describe('loadRecipe', () => {
 
     (axios.get as any).mockResolvedValue(mockRecipeResponse);
 
-    const recipe = await loadRecipe('fake-id', 'ValidRecipe.json');
+    const recipe = await store.loadRecipe('ValidRecipe.json');
 
     expect(recipe?.itemListElement[0].name).toBe('Test Recipe');
     expect(recipe?.itemListElement[0].ingredients).toHaveLength(1);
@@ -114,7 +118,7 @@ describe('loadRecipe', () => {
 
     (axios.get as any).mockResolvedValue(mockRecipeResponse);
 
-    const recipe = await loadRecipe('fake-id', 'MissingRecipe.json');
+    const recipe = await store.loadRecipe('MissingRecipe.json');
     expect(recipe).toBeNull();
   });
 
@@ -131,7 +135,7 @@ describe('loadRecipe', () => {
 
     (axios.get as any).mockResolvedValue(mockRecipeResponse);
 
-    await expect(loadRecipe('fake-id', 'Bad.json')).rejects.toThrow(/^Invalid Tibls JSON format/);
+    await expect(store.loadRecipe('Bad.json')).rejects.toThrow(/^Invalid Tibls JSON format/);
   });
 
   it('throws an error if itemListElement is missing', async () => {
@@ -147,6 +151,6 @@ describe('loadRecipe', () => {
 
     (axios.get as any).mockResolvedValue(mockRecipeResponse);
 
-    await expect(loadRecipe('fake-id', 'Empty.json')).rejects.toThrow(/^Invalid Tibls JSON format/);
+    await expect(store.loadRecipe('Empty.json')).rejects.toThrow(/^Invalid Tibls JSON format/);
   });
 });

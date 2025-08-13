@@ -5,6 +5,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import sharp from 'sharp';
 import { JPEG_IMAGE_QUALITY, MAX_BASE64_SIZE, MAX_IMAGE_WIDTH } from './constants';
+import { TiblsRecipeEnvelope } from '../types/recipeStoreTypes';
 
 const execFileAsync = promisify(execFile);
 
@@ -17,7 +18,10 @@ export function resolveFromRoot(...segments: string[]): string {
 }
 
 // Generates a filename for a recipe based on its name and the current date
-export function generateRecipeFilename(tiblsJson: any, appendTimestamp: boolean = true): string {
+export function generateRecipeFilename(
+  tiblsJson: TiblsRecipeEnvelope,
+  appendTimestamp: boolean = true
+): string {
   const fallbackName = 'Untitled-Recipe';
   let baseName = fallbackName;
 

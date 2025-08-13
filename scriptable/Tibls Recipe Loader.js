@@ -3,7 +3,7 @@
 // icon-color: purple; icon-glyph: edit; share-sheet-inputs: file-url, url, image;
 
 // ngrok (localhost) version
-// const webhookUrl = "https://c58f-76-22-26-231.ngrok-free.app/webhook";
+// const webhookUrl = "https://d351ef865fca.ngrok-free.app/webhook";
 
 // Render version
 const webhookUrl = "https://tibls-recipe-generator-ptm9.onrender.com/webhook";

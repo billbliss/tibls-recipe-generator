@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import fs from 'fs';
 import { renderViewerHtml } from '../viewerUiService';
-import { RecipeRecord } from '../storageService';
+import { RecipeRecord } from '../../types/recipeStoreTypes';
 
 vi.mock('fs');
 

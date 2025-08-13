@@ -16,10 +16,24 @@ import { resolveFromRoot, saveImageToPublicDir } from './utils/file-utils';
 import { handlePdfFile } from './services/pdfService';
 import { handleUrl } from './services/urlService';
 import { processRecipeWithChatGPT, processImageRecipe } from './services/chatgptService';
-import { loadRecipe, loadAllRecipes, saveRecipe, getCurrentDbId } from './services/storageService';
 import { renderViewerHtml } from './services/viewerUiService';
+import { WebhookInput, ResponseMode } from './types/types';
+import { TiblsRecipe } from './types/recipeStoreTypes';
 
-import { WebhookInput, ResponseMode, TiblsRecipe } from './types/types';
+// Import storage layer
+import { createRecipeStore } from './services/recipeStore';
+const recipeStore = createRecipeStore();
+
+// Ensure underlying store is initialized exactly once
+const storeReady: Promise<void> = (async () => {
+  try {
+    if (typeof (recipeStore as any).initialize === 'function') {
+      await (recipeStore as any).initialize();
+    }
+  } catch (e) {
+    error('Failed to initialize recipe store', e);
+  }
+})();
 
 export const app = express(); // Exported for integration tests
 const port = process.env.PORT || 3000;
@@ -76,6 +90,7 @@ app.post(
 // - VIEWER: returns a URL to the viewer page for the generated recipe
 // - JSON: returns the raw Tibls JSON object
 app.post('/webhook', upload.array('filename'), async (req: Request, res: Response) => {
+  await storeReady;
   let input = req.body.input;
   const files: Express.Multer.File[] = Array.isArray(req.files) ? req.files : [];
   const firstFile = files.length > 0 ? files[0] : undefined;
@@ -184,8 +199,8 @@ app.post('/webhook', upload.array('filename'), async (req: Request, res: Respons
       tiblsJson = await processRecipeWithChatGPT(input, req.body.ogImageUrl);
     }
     if (responseMode === ResponseMode.VIEWER) {
-      const filename = await saveRecipe(getCurrentDbId(), tiblsJson);
-      res.json({ status: 'queued', viewer: `${baseUrl}/gist/${filename}` });
+      const filename = await recipeStore.saveRecipe(tiblsJson);
+      res.json({ status: 'queued', viewer: `${baseUrl}/recipe-collection/${filename}` });
     } else if (responseMode === ResponseMode.JSON) {
       res.json(tiblsJson);
     }
@@ -195,13 +210,14 @@ app.post('/webhook', upload.array('filename'), async (req: Request, res: Respons
   }
 });
 
-// This route serves a specific file from the Gist by filename
-// It fetches the Gist content and returns the requested file's content
-app.get('/gist-file/:filename', async (req: Request, res: Response) => {
+// This route serves a specific recipe from the collection by filename
+// It fetches the collection content and returns the requested recipe
+app.get('/recipe-file/:filename(*)', async (req: Request, res: Response) => {
   const filename = req.params.filename;
 
   try {
-    const fileContent = await loadRecipe(getCurrentDbId(), filename);
+    await storeReady;
+    const fileContent = await recipeStore.loadRecipe(filename);
     if (!fileContent) {
       res.status(404).send('File not found');
       return;
@@ -209,28 +225,32 @@ app.get('/gist-file/:filename', async (req: Request, res: Response) => {
 
     res.setHeader('Content-Type', 'application/json');
     res.send(fileContent);
-  } catch (err) {
-    error('Error fetching Gist file:', err);
-    res.status(500).send('Failed to retrieve file');
+  } catch (err: any) {
+    error('Error fetching recipe content:', err);
+    if (process.env.NODE_ENV === 'test') {
+      res.status(500).json({ error: err?.message || String(err), stack: err?.stack });
+    } else {
+      res.status(500).send('Failed to retrieve file');
+    }
   }
 });
 
-app.get(['/', '/gist/:gistId'], async (req, res) => {
+app.get(['/', '/recipe-collection/:recipeId'], async (req, res) => {
   const baseUrl = getBaseUrl(req);
 
   try {
-    const recipes = await loadAllRecipes(getCurrentDbId(), baseUrl);
+    await storeReady;
+    const recipes = await recipeStore.loadAllRecipes(baseUrl);
     const html = renderViewerHtml(recipes);
     res.send(html);
   } catch (err) {
-    error('Error fetching Gist:', err);
-    res.status(500).send('Error loading recipe viewer.');
+    error('Error fetching recipes:', err);
+    res.status(500).send('Error loading recipe collection.');
   }
 });
 
-// Saves edited Tibls JSON to Gist
+// Saves edited Tibls JSON to storage
 app.post('/update-recipe-image', async (req: Request, res: Response) => {
-  console.log('Received update-recipe-image request:', req.body);
   const filename = req.body.filename;
   if (!filename) {
     res.status(400).json({
@@ -250,12 +270,13 @@ app.post('/update-recipe-image', async (req: Request, res: Response) => {
   }
 
   try {
-    // Fetch the original recipe JSON from the gist using loadRecipe
-    const originalJson = await loadRecipe(getCurrentDbId(), filename);
+    await storeReady;
+    // Fetch the original recipe JSON from storage using loadRecipe
+    const originalJson = await recipeStore.loadRecipe(filename);
     if (!originalJson) {
       res.status(404).json({
         success: false,
-        error: `Original recipe file "${filename}" not found in Gist.`
+        error: `Original recipe file "${filename}" not found in recipe collection.`
       });
       return;
     }
@@ -267,7 +288,7 @@ app.post('/update-recipe-image', async (req: Request, res: Response) => {
       )
     };
 
-    const updatedFilename = await saveRecipe(getCurrentDbId(), updatedJson, filename);
+    const updatedFilename = await recipeStore.saveRecipe(updatedJson, filename);
     res.json({ success: true, filename: `${updatedFilename}` });
   } catch (err: any) {
     if (err.message?.includes('Invalid Tibls JSON format')) {

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { resolveFromRoot } from '../utils/file-utils';
-import { RecipeRecord } from './storageService';
+import { RecipeRecord } from '../types/recipeStoreTypes';
 
 export function renderViewerHtml(recipes: RecipeRecord[]): string {
   const template = fs.readFileSync(resolveFromRoot('public', 'viewer.html'), 'utf8');

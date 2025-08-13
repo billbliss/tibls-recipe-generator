@@ -4,7 +4,8 @@ import path from 'path';
 import { createLogger } from '../utils/core-utils';
 import { resolveFromRoot, generateRecipeFilename } from '../utils/file-utils';
 import { applyPerServingCaloriesOverride, enforcePerServingCalories } from '../utils/recipe-utils';
-import { RecipeFocusMode, TiblsRecipeEnvelope } from '../types/types';
+import { RecipeFocusMode } from '../types/types';
+import { TiblsRecipeEnvelope } from '../types/recipeStoreTypes';
 import sharp from 'sharp';
 
 import tiblsSchemaJson from '../prompts/tibls-schema.json';

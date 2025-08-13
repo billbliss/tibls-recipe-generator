@@ -1,0 +1,22 @@
+{
+  "ValidRecipe-01-Jan-2024.json": {
+    "@type": "application/tibls+json",
+    "itemListElement": [
+      {
+        "@type": "https://tibls.app/types/recipe",
+        "id": "test-id",
+        "name": "Mock Recipe",
+        "summary": "This is a fake recipe",
+        "ingredients": [{ "text": "1 cup flour", "sectionHeader": "Main" }],
+        "steps": [{ "text": "Mix well", "sectionHeader": "Prep" }],
+        "ogImageUrl": "https://example.com/original.jpg"
+      }
+    ]
+  },
+  "Invalid.json": {
+    "content": "{not valid json"
+  },
+  "ignore.txt": {
+    "content": "should be ignored"
+  }
+}

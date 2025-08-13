@@ -1,34 +1,33 @@
+import { vi, describe, it, beforeEach, beforeAll, expect } from 'vitest';
 import request from 'supertest';
-import { app } from '../../server';
-import axios from 'axios';
-import { describe, it, beforeEach, expect, vi } from 'vitest';
 
-import * as storageService from '../../services/storageService';
+import fs from 'fs';
+import path from 'path';
 
-vi.mock('axios');
-vi.mock('../../services/storageService', async () => {
-  const actual = await vi.importActual<typeof storageService>('../../services/storageService');
-
-  return {
-    ...actual,
-    loadRecipe: vi.fn(() =>
-      Promise.resolve({
-        '@type': 'application/tibls+json',
-        itemListElement: [
-          {
-            '@type': 'https://tibls.app/types/recipe',
-            id: 'test-id',
-            name: 'Mock Recipe',
-            ingredients: [{ text: '1 cup flour', sectionHeader: 'Main' }],
-            steps: [{ text: 'Mix well', sectionHeader: 'Prep' }],
-            ogImageUrl: 'https://example.com/original.jpg'
-          }
-        ]
-      })
-    ),
-    saveRecipeFile: vi.fn(() => Promise.resolve(true))
-  };
+beforeAll(async () => {
+  // Use local JSON store for this viewer test
+  process.env.RECIPE_STORE_TYPE = 'json';
+  vi.resetModules(); // clear module cache so server re-reads env
+  ({ app } = await import('../../server'));
 });
+
+const originalPath = path.join(__dirname, '../fixtures/json/test-json-original.json');
+const testPath = path.join(__dirname, '../fixtures/json/test-json.json');
+
+beforeAll(async () => {
+  fs.copyFileSync(originalPath, testPath);
+
+  const serverModule = await import('../../server');
+  app = serverModule.app;
+});
+let app: typeof import('../../server').app;
+
+afterAll(() => {
+  fs.copyFileSync(originalPath, testPath);
+});
+
+import axios from 'axios';
+vi.mock('axios');
 
 describe('POST /webhook TEXT and INVALID inputs', () => {
   const fakeToolArgs = {
@@ -194,7 +193,10 @@ describe('POST /update-recipe-image', () => {
   it('returns 200 and updates the ogImageUrl when both filename and image URL are valid', async () => {
     const res = await request(app)
       .post('/update-recipe-image')
-      .send({ filename: 'test-recipe.json', ogImageUrl: 'https://example.com/image.jpg' })
+      .send({
+        filename: 'ValidRecipe-01-Jan-2024.json',
+        ogImageUrl: 'https://example.com/image.jpg'
+      })
       .set('Content-Type', 'application/json');
 
     expect(res.status).toBe(200);

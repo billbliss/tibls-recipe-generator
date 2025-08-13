@@ -23,7 +23,7 @@ describe('POST /webhook triggers ChatGPT processing', () => {
     vi.resetAllMocks();
     process.env.OPENAI_API_KEY = 'fake-key';
     process.env.GITHUB_TOKEN = 'fake-gh-token';
-    process.env.GIST_ID = 'fake-gist';
+    process.env.DEFAULT_GIST_ID = 'fake-gist';
   });
 
   it('processes TEXT input fully and returns Tibls JSON', async () => {
@@ -71,7 +71,7 @@ describe('POST /webhook triggers ChatGPT processing', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('queued');
-    expect(res.body.viewer).toContain('fake-filename.json');
+    expect(res.body.viewer).toContain('ValidRecipe-01-Jan-2024.json');
   });
 
   it('returns 500 if OpenAI returns no tool call arguments', async () => {

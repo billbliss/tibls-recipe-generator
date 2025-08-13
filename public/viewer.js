@@ -450,7 +450,7 @@ function getActiveInput() {
 
 async function refreshRecipeCard(recipeId, filename) {
   try {
-    const result = await fetch(`/gist-file/${filename}`, {
+    const result = await fetch(`/recipe-file/${filename}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: recipeId, filename })

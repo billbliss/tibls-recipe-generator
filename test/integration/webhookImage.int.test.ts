@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import { app } from '../../server';
 import * as chatgptService from '../../services/chatgptService';
-import type { TiblsRecipeEnvelope } from '../../types/types';
+import type { TiblsRecipeEnvelope } from '../../types/recipeStoreTypes';
 
 const mockImageResponse: TiblsRecipeEnvelope = {
   '@type': 'application/tibls+json',
