@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import { app } from '../../server';
-import { TiblsRecipe } from '../../types/types';
+import { TiblsRecipe } from '../../types/recipeStoreTypes';
 import * as chatgptService from '../../services/chatgptService';
 
 const mockRecipe: TiblsRecipe = {

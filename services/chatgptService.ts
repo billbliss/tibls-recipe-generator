@@ -131,7 +131,7 @@ export async function processImageRecipe(textInput: string, images: Buffer[] = [
   // Auto-rotate, resize, and compress images for optimal ChatGPT input
   const normalizedImages: Buffer[] = [];
   for (let i = 0; i < images.length; i++) {
-    const resized = await sharp(images[i].buffer)
+    const resized = await sharp(Buffer.from(images[i].buffer))
       .rotate()
       .resize({ width: 1024 }) // downscale to 1024px width
       .jpeg({ quality: 80 }) // compress to reasonable size
